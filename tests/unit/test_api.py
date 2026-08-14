@@ -13,8 +13,10 @@ from vocalika.api.app import create_app
 async def test_analysis_and_audio_are_served_locally(tmp_path: Path) -> None:
     reference = tmp_path / "reference.wav"
     performance = tmp_path / "performance.flac"
+    original_mix = tmp_path / "original-mix.mp3"
     reference.write_bytes(b"reference-audio")
     performance.write_bytes(b"performance-audio")
+    original_mix.write_bytes(b"original-mix-audio")
     artifact_path = tmp_path / "analysis.json"
     artifact_path.write_text(
         json.dumps(
@@ -23,6 +25,7 @@ async def test_analysis_and_audio_are_served_locally(tmp_path: Path) -> None:
                 "reference": {
                     "analysis_audio": str(reference),
                     "source": {"path": str(reference)},
+                    "original_mix": {"path": str(original_mix)},
                 },
                 "performance": {"source": {"path": str(performance)}},
             }
@@ -35,4 +38,5 @@ async def test_analysis_and_audio_are_served_locally(tmp_path: Path) -> None:
         assert (await client.get("/api/health")).json() == {"status": "ok"}
         assert (await client.get("/api/analysis")).json()["schema_version"] == "0.1.0"
         assert (await client.get("/api/audio/reference")).content == b"reference-audio"
+        assert (await client.get("/api/audio/reference-mix")).content == b"original-mix-audio"
         assert (await client.get("/api/audio/performance")).content == b"performance-audio"

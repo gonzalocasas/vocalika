@@ -23,7 +23,11 @@ interface Frames {
 
 interface Artifact {
   created_at: string
-  reference: { source: { path: string; duration_seconds: number }; is_isolated_vocal: boolean }
+  reference: {
+    source: { path: string; duration_seconds: number }
+    is_isolated_vocal: boolean
+    original_mix: { path: string; duration_seconds: number } | null
+  }
   performance: { source: { path: string; duration_seconds: number } }
   comparison: { summary: Summary; frames: Frames }
   warnings: string[]
@@ -34,12 +38,14 @@ const error = ref("")
 const pitchPlot = ref<HTMLDivElement | null>(null)
 const errorPlot = ref<HTMLDivElement | null>(null)
 const referenceAudio = ref<HTMLAudioElement | null>(null)
+const referenceMixAudio = ref<HTMLAudioElement | null>(null)
 const performanceAudio = ref<HTMLAudioElement | null>(null)
 const selectionStart = ref(0)
 const selectionEnd = ref(30)
 const comparisonMode = ref<"absolute" | "relative">("absolute")
 const looping = ref(false)
-const activePlayer = ref<"reference" | "performance" | null>(null)
+type PlayerKind = "reference" | "reference-mix" | "performance"
+const activePlayer = ref<PlayerKind | null>(null)
 let stopTimer: number | undefined
 let sequenceTimer: number | undefined
 
@@ -77,26 +83,34 @@ function clearTimers(): void {
 function stopAll(): void {
   clearTimers()
   referenceAudio.value?.pause()
+  referenceMixAudio.value?.pause()
   performanceAudio.value?.pause()
   activePlayer.value = null
 }
 
-function scheduleStop(kind: "reference" | "performance", start: number, end: number): void {
+function playerFor(kind: PlayerKind): HTMLAudioElement | null {
+  if (kind === "reference") return referenceAudio.value
+  if (kind === "reference-mix") return referenceMixAudio.value
+  return performanceAudio.value
+}
+
+function scheduleStop(kind: PlayerKind, start: number, end: number): void {
   const duration = Math.max(0.05, end - start)
   stopTimer = window.setTimeout(() => {
-    const player = kind === "reference" ? referenceAudio.value : performanceAudio.value
+    const player = playerFor(kind)
     player?.pause()
     activePlayer.value = null
     if (looping.value) void play(kind)
   }, duration * 1000)
 }
 
-async function play(kind: "reference" | "performance"): Promise<void> {
+async function play(kind: PlayerKind): Promise<void> {
   stopAll()
-  const player = kind === "reference" ? referenceAudio.value : performanceAudio.value
+  const player = playerFor(kind)
   if (!player) return
-  const start = kind === "reference" ? selectionStart.value : mappedPerformanceTime(selectionStart.value)
-  const end = kind === "reference" ? selectionEnd.value : mappedPerformanceTime(selectionEnd.value)
+  const usesReferenceTime = kind !== "performance"
+  const start = usesReferenceTime ? selectionStart.value : mappedPerformanceTime(selectionStart.value)
+  const end = usesReferenceTime ? selectionEnd.value : mappedPerformanceTime(selectionEnd.value)
   player.currentTime = start
   activePlayer.value = kind
   await player.play()
@@ -319,13 +333,20 @@ onBeforeUnmount(() => {
           <span>seconds, in reference time</span>
         </div>
         <div class="transport">
-          <button :class="{ active: activePlayer === 'reference' }" @click="play('reference')">Reference</button>
+          <button :class="{ active: activePlayer === 'reference' }" @click="play('reference')">Reference vocal</button>
+          <button
+            :class="{ active: activePlayer === 'reference-mix' }"
+            @click="play('reference-mix')"
+          >
+            Original mix
+          </button>
           <button :class="{ active: activePlayer === 'performance' }" @click="play('performance')">Mine</button>
           <button @click="playAB">A / B</button>
           <button @click="stopAll">Stop</button>
           <label class="loop"><input v-model="looping" type="checkbox" /> Loop</label>
         </div>
         <audio ref="referenceAudio" preload="metadata" src="/api/audio/reference"></audio>
+        <audio ref="referenceMixAudio" preload="metadata" src="/api/audio/reference-mix"></audio>
         <audio ref="performanceAudio" preload="metadata" src="/api/audio/performance"></audio>
       </section>
     </template>

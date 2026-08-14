@@ -38,7 +38,8 @@ uv run vocalika analyze \
   --reference ./reference-vocal.wav \
   --performance ./ableton-take.flac \
   --output ./analysis-output \
-  --reference-is-vocal
+  --reference-is-vocal \
+  --reference-mix ./original-reference.mp3
 
 uv run vocalika plot ./analysis-output/analysis.json
 uv run vocalika serve ./analysis-output/analysis.json
@@ -46,6 +47,8 @@ uv run vocalika serve ./analysis-output/analysis.json
 
 Then open <http://127.0.0.1:8000>. Original source files are never modified.
 Working audio and large pitch arrays live beside the generated analysis JSON.
+`--output` accepts either an output directory or an explicit `.json` artifact
+path.
 
 ## Model downloads
 

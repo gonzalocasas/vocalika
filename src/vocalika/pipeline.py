@@ -22,6 +22,13 @@ def _quiet(_: str) -> None:
     pass
 
 
+def _resolve_output_paths(output: Path) -> tuple[Path, Path]:
+    resolved_output = output.expanduser().resolve()
+    if resolved_output.suffix.lower() == ".json":
+        return resolved_output.parent, resolved_output
+    return resolved_output, resolved_output / "analysis.json"
+
+
 def _save_tracks(path: Path, reference: PitchTrack, performance: PitchTrack) -> None:
     np.savez_compressed(
         path,
@@ -43,18 +50,24 @@ def _save_tracks(path: Path, reference: PitchTrack, performance: PitchTrack) -> 
 def run_analysis(
     reference_path: Path,
     performance_path: Path,
-    output_directory: Path,
+    output: Path,
     *,
     reference_is_vocal: bool = False,
+    reference_mix_path: Path | None = None,
     progress: ProgressCallback = _quiet,
 ) -> Path:
-    output_directory = output_directory.expanduser().resolve()
-    work_directory = output_directory / "working-audio"
+    output_directory, artifact_path = _resolve_output_paths(output)
+    explicit_name = artifact_path.name != "analysis.json"
+    asset_prefix = f"{artifact_path.stem}." if explicit_name else ""
+    work_directory = output_directory / (
+        f"{artifact_path.stem}.working-audio" if explicit_name else "working-audio"
+    )
     output_directory.mkdir(parents=True, exist_ok=True)
 
     progress("Inspecting input audio")
     reference_info = probe_audio(reference_path)
     performance_info = probe_audio(performance_path)
+    reference_mix_info = probe_audio(reference_mix_path) if reference_mix_path else None
 
     progress("Decoding reference to analysis audio")
     reference_wav = decode_for_analysis(reference_path, work_directory / "reference.wav")
@@ -72,7 +85,7 @@ def run_analysis(
     progress("Calculating pitch differences")
     comparison = compare_alignment(alignment)
 
-    arrays_path = output_directory / "pitch-tracks.npz"
+    arrays_path = output_directory / f"{asset_prefix}pitch-tracks.npz"
     _save_tracks(arrays_path, reference_pitch, performance_pitch)
 
     frames: dict[str, Any] = {
@@ -93,6 +106,7 @@ def run_analysis(
             "source": reference_info.to_dict(),
             "analysis_audio": str(reference_wav),
             "is_isolated_vocal": reference_is_vocal,
+            "original_mix": reference_mix_info.to_dict() if reference_mix_info else None,
         },
         "performance": {
             "source": performance_info.to_dict(),
@@ -131,7 +145,6 @@ def run_analysis(
             ]
         ),
     }
-    artifact_path = output_directory / "analysis.json"
     artifact_path.write_text(
         json.dumps(artifact, indent=2, allow_nan=False) + "\n",
         encoding="utf-8",

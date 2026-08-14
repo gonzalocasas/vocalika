@@ -17,7 +17,10 @@ app = typer.Typer(no_args_is_help=True, help="Analyze and compare vocal performa
 def analyze(
     reference: Annotated[Path, typer.Option(exists=True, dir_okay=False, readable=True)],
     performance: Annotated[Path, typer.Option(exists=True, dir_okay=False, readable=True)],
-    output: Annotated[Path, typer.Option(file_okay=False)] = Path("analysis-output"),
+    output: Annotated[
+        Path,
+        typer.Option(help="Output directory, or an explicit .json artifact path."),
+    ] = Path("analysis-output"),
     reference_is_vocal: Annotated[
         bool,
         typer.Option(
@@ -25,6 +28,15 @@ def analyze(
             help="Skip the full-mix warning for isolated vocals.",
         ),
     ] = False,
+    reference_mix: Annotated[
+        Path | None,
+        typer.Option(
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Optional original mix retained for listening when reference is an isolated stem.",
+        ),
+    ] = None,
 ) -> None:
     """Run the Milestone 0 local-file feasibility analysis."""
     artifact = run_analysis(
@@ -32,6 +44,7 @@ def analyze(
         performance,
         output,
         reference_is_vocal=reference_is_vocal,
+        reference_mix_path=reference_mix,
         progress=typer.echo,
     )
     typer.echo(f"Next: vocalika plot {artifact}")

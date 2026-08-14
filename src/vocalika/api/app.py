@@ -28,7 +28,10 @@ def create_app(artifact_path: Path, frontend_directory: Path | None = None) -> F
         if kind == "reference":
             candidate = Path(artifact["reference"]["analysis_audio"])
         elif kind == "reference-mix":
-            candidate = Path(artifact["reference"]["source"]["path"])
+            original_mix = artifact["reference"].get("original_mix")
+            candidate = Path(
+                original_mix["path"] if original_mix else artifact["reference"]["source"]["path"]
+            )
         else:
             candidate = Path(artifact["performance"]["source"]["path"])
         if not candidate.is_file():
