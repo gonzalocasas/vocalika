@@ -15,6 +15,7 @@ from vocalika.analysis.alignment import align_pitch_tracks
 from vocalika.analysis.comparison import compare_alignment
 from vocalika.analysis.pitch import PitchTrack, PyinPitchExtractor
 from vocalika.analysis.pitch_cache import extract_clean_pitch
+from vocalika.analysis.stable_notes import analyze_stable_pitch_centers
 from vocalika.audio.preprocessing import normalize_for_analysis
 from vocalika.audio.separation import DemucsVocalSeparator, SeparationResult
 from vocalika.audio.sources import (
@@ -185,6 +186,20 @@ def run_analysis(
         good_tolerance_cents=config.good_tolerance_cents,
         noticeable_tolerance_cents=config.noticeable_tolerance_cents,
     )
+    stable_pitch = analyze_stable_pitch_centers(
+        alignment,
+        comparison,
+        frames_per_second=alignment.frames_per_second,
+        window_seconds=config.stable_note_window_seconds,
+        max_span_cents=config.stable_note_max_span_cents,
+        max_slope_cents_per_second=config.stable_note_max_slope_cents_per_second,
+        minimum_duration_seconds=config.stable_note_minimum_duration_seconds,
+        minimum_voiced_window_fraction=config.stable_note_minimum_voiced_window_fraction,
+        minimum_matched_region_fraction=config.stable_note_minimum_matched_region_fraction,
+        minimum_alignment_duration_ratio=(config.stable_note_minimum_alignment_duration_ratio),
+        maximum_alignment_duration_ratio=(config.stable_note_maximum_alignment_duration_ratio),
+        confidence_threshold=config.pitch_confidence_threshold,
+    )
 
     arrays_path = output_directory / f"{asset_prefix}pitch-tracks.npz"
     _save_tracks(arrays_path, reference_pitch, performance_pitch)
@@ -209,6 +224,11 @@ def run_analysis(
         warnings.append(
             f"Only {comparison.valid_fraction:.1%} of alignment points were sufficiently "
             "confident and voiced; inspect the contours before trusting summary metrics."
+        )
+    if not stable_pitch.regions:
+        warnings.append(
+            "No sufficiently long, stable reference pitch regions were found; pitch-center "
+            "metrics are unavailable."
         )
 
     artifact: dict[str, Any] = {
@@ -281,8 +301,21 @@ def run_analysis(
                 "valid_frame_count": int(np.count_nonzero(comparison.valid)),
                 "valid_fraction": comparison.valid_fraction,
                 "matched_seconds": comparison.matched_seconds,
+                "stable_note_pitch_center_mae_cents": stable_pitch.pitch_center_mae_cents,
+                "relative_stable_note_pitch_center_mae_cents": (
+                    stable_pitch.relative_pitch_center_mae_cents
+                ),
+                "stable_note_duration_weighted_mae_cents": (
+                    stable_pitch.duration_weighted_mae_cents
+                ),
+                "relative_stable_note_duration_weighted_mae_cents": (
+                    stable_pitch.relative_duration_weighted_mae_cents
+                ),
+                "stable_note_region_count": len(stable_pitch.regions),
+                "stable_note_total_seconds": stable_pitch.total_stable_seconds,
             },
             "frames": frames,
+            "stable_pitch_regions": [region.to_dict() for region in stable_pitch.regions],
         },
         "warnings": warnings,
     }

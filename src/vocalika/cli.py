@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from functools import partial
 from pathlib import Path
 from typing import Annotated
 
@@ -101,11 +102,24 @@ def serve(
     analysis: Annotated[Path, typer.Argument(exists=True, dir_okay=False, readable=True)],
     host: Annotated[str, typer.Option()] = "127.0.0.1",
     port: Annotated[int, typer.Option(min=1, max=65535)] = 8000,
+    cache_directory: Annotated[
+        Path | None,
+        typer.Option(file_okay=False, help="Cache used by analyses started in the web UI."),
+    ] = None,
 ) -> None:
     """Serve an analysis and the local practice UI."""
     repository_root = Path(__file__).resolve().parents[2]
     frontend_directory = repository_root / "frontend" / "dist"
-    uvicorn.run(create_app(analysis, frontend_directory), host=host, port=port)
+    web_analysis_runner = partial(run_analysis, cache_directory=cache_directory)
+    uvicorn.run(
+        create_app(
+            analysis,
+            frontend_directory,
+            analysis_runner=web_analysis_runner,
+        ),
+        host=host,
+        port=port,
+    )
 
 
 @app.command("setup-models")

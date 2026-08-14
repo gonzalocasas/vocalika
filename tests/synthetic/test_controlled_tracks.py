@@ -7,6 +7,7 @@ from vocalika.analysis.alignment import align_pitch_tracks
 from vocalika.analysis.cleaning import clean_pitch_track
 from vocalika.analysis.comparison import compare_alignment
 from vocalika.analysis.pitch import PitchTrack
+from vocalika.analysis.stable_notes import analyze_stable_pitch_centers
 
 
 def make_track(
@@ -119,3 +120,30 @@ def test_repairs_brief_octave_detector_error() -> None:
     cleaned = clean_pitch_track(track)
 
     np.testing.assert_allclose(cleaned.midi[glitch], 64.0, atol=0.01)
+
+
+def test_stable_pitch_centers_recover_global_shift() -> None:
+    alignment = align_pitch_tracks(make_track(), make_track(pitch_shift=0.5))
+    comparison = compare_alignment(alignment)
+
+    stable = analyze_stable_pitch_centers(alignment, comparison, frames_per_second=10.0)
+
+    assert len(stable.regions) >= 4
+    assert stable.pitch_center_mae_cents == pytest.approx(50.0, abs=2.0)
+    assert stable.relative_pitch_center_mae_cents == pytest.approx(0.0, abs=2.0)
+
+
+def test_stable_pitch_center_metric_excludes_transition_only_errors() -> None:
+    reference = make_track()
+    performance = make_track()
+    for boundary in (2.0, 4.0, 6.0):
+        transition = np.abs(performance.times - boundary) <= 0.2
+        performance.midi[transition] += 1.5
+        performance.raw_midi[transition] += 1.5
+    alignment = align_pitch_tracks(reference, performance)
+    comparison = compare_alignment(alignment)
+
+    stable = analyze_stable_pitch_centers(alignment, comparison, frames_per_second=10.0)
+
+    assert stable.pitch_center_mae_cents is not None
+    assert stable.pitch_center_mae_cents < comparison.mean_absolute_error_cents

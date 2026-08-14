@@ -77,6 +77,28 @@ Working audio and large pitch arrays live beside the generated analysis JSON.
 `--output` accepts either an output directory or an explicit `.json` artifact
 path.
 
+The web interface can start another analysis from either a local reference file
+or a public YouTube URL plus a local performance file. Uploaded audio is saved
+under `samples/uploads/<analysis-id>/`; its artifact is written under
+`analysis-output/web/<analysis-id>/`. Both locations are intentionally ignored
+by Git.
+
+## Pitch metrics
+
+Vocalika reports two complementary error families:
+
+- **Contour MAE** compares all confident aligned pitch frames, including
+  transitions, scoops, and other pitch movement.
+- **Stable-note center MAE** detects sustained reference regions, rejects
+  regions with inadequate performance coverage or implausible time warping,
+  and compares median pitch centers. The artifact records the number and total
+  duration of included regions so a small subset is not mistaken for a general
+  score.
+
+Both are available in absolute mode and with global transposition compensated
+in relative mode. Stable-note regions are highlighted lightly in green in the
+pitch graph.
+
 ## Models and cache
 
 pYIN pitch extraction does not require learned model parameters. Demucs uses a
