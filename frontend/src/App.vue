@@ -118,7 +118,11 @@ async function renderPlots(): Promise<void> {
   if (!artifact.value || !pitchPlot.value || !errorPlot.value) return
   const frames = artifact.value.comparison.frames
   const referencePitch = masked(frames.reference_midi, frames.valid)
-  const performancePitch = masked(frames.performance_midi, frames.valid)
+  const performancePitch = masked(frames.performance_midi, frames.valid).map((value) =>
+    value === null || comparisonMode.value === "absolute"
+      ? value
+      : value - artifact.value!.comparison.summary.global_bias_cents / 100,
+  )
   const errorValues = masked(
     comparisonMode.value === "absolute"
       ? frames.absolute_error_cents
@@ -261,7 +265,7 @@ onBeforeUnmount(() => {
 
       <section class="metrics">
         <article>
-          <span>MEAN ABSOLUTE ERROR</span>
+          <span>ABSOLUTE MEAN ERROR</span>
           <strong>{{ summary.mean_absolute_error_cents.toFixed(1) }}¢</strong>
         </article>
         <article>
@@ -296,7 +300,10 @@ onBeforeUnmount(() => {
         <div ref="pitchPlot" class="plot"></div>
         <div class="error-heading">
           <span class="section-label">PITCH DIFFERENCE</span>
-          <span>The shaded band is within ±25 cents.</span>
+          <span>
+            {{ comparisonMode === "absolute" ? "Literal pitch" : "Global bias compensated" }} ·
+            shaded band is within ±25 cents.
+          </span>
         </div>
         <div ref="errorPlot" class="plot"></div>
       </section>

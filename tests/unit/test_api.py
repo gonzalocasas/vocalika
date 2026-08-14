@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi.testclient import TestClient
+import pytest
+from httpx import ASGITransport, AsyncClient
 
 from vocalika.api.app import create_app
 
 
-def test_analysis_and_audio_are_served_locally(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_analysis_and_audio_are_served_locally(tmp_path: Path) -> None:
     reference = tmp_path / "reference.wav"
     performance = tmp_path / "performance.flac"
     reference.write_bytes(b"reference-audio")
@@ -27,9 +29,10 @@ def test_analysis_and_audio_are_served_locally(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    client = TestClient(create_app(artifact_path))
+    transport = ASGITransport(app=create_app(artifact_path))
 
-    assert client.get("/api/health").json() == {"status": "ok"}
-    assert client.get("/api/analysis").json()["schema_version"] == "0.1.0"
-    assert client.get("/api/audio/reference").content == b"reference-audio"
-    assert client.get("/api/audio/performance").content == b"performance-audio"
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        assert (await client.get("/api/health")).json() == {"status": "ok"}
+        assert (await client.get("/api/analysis")).json()["schema_version"] == "0.1.0"
+        assert (await client.get("/api/audio/reference")).content == b"reference-audio"
+        assert (await client.get("/api/audio/performance")).content == b"performance-audio"
