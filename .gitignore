@@ -1,0 +1,22 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+frontend/node_modules/
+frontend/dist/
+
+.vocalika/
+analysis-output/
+
+# Personal/copyrighted audio fixtures stay local.
+samples/*
+!samples/.gitkeep
