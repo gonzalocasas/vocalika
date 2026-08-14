@@ -39,3 +39,16 @@ def test_pyin_recovers_known_cent_shift(tmp_path: Path, shift_cents: float) -> N
     recovered_cents = 100.0 * (performance_center - reference_center)
 
     assert recovered_cents == pytest.approx(shift_cents, abs=6.0)
+
+
+def test_concert_pitch_is_configurable(tmp_path: Path) -> None:
+    audio_path = tmp_path / "a4-442.wav"
+    sample_rate = 16_000
+    times = np.arange(2 * sample_rate, dtype=np.float64) / sample_rate
+    sf.write(
+        audio_path, (0.3 * np.sin(2.0 * np.pi * 442.0 * times)).astype(np.float32), sample_rate
+    )
+
+    track = clean_pitch_track(PyinPitchExtractor(concert_pitch_hz=442.0).extract(audio_path))
+
+    assert np.nanmedian(track.midi) == pytest.approx(69.0, abs=0.06)

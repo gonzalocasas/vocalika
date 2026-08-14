@@ -5,9 +5,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
 interface Summary {
   global_bias_cents: number
   mean_absolute_error_cents: number
+  relative_mean_absolute_error_cents: number
+  within_15_percent: number
   within_25_percent: number
   within_50_percent: number
+  relative_within_15_percent: number
+  relative_within_25_percent: number
+  relative_within_50_percent: number
   valid_frame_count: number
+  valid_fraction: number
+  matched_seconds: number
 }
 
 interface Frames {
@@ -52,6 +59,21 @@ let plotsAreLinked = false
 let mirroringRange = false
 
 const summary = computed(() => artifact.value?.comparison.summary)
+const displayedMeanError = computed(() =>
+  comparisonMode.value === "absolute"
+    ? summary.value?.mean_absolute_error_cents
+    : summary.value?.relative_mean_absolute_error_cents,
+)
+const displayedWithin25 = computed(() =>
+  comparisonMode.value === "absolute"
+    ? summary.value?.within_25_percent
+    : summary.value?.relative_within_25_percent,
+)
+const displayedWithin50 = computed(() =>
+  comparisonMode.value === "absolute"
+    ? summary.value?.within_50_percent
+    : summary.value?.relative_within_50_percent,
+)
 const fileName = (path: string) => path.split("/").pop() ?? path
 const formatCents = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(1)}¢`
 
@@ -314,8 +336,8 @@ onBeforeUnmount(() => {
 
       <section class="metrics">
         <article>
-          <span>ABSOLUTE MEAN ERROR</span>
-          <strong>{{ summary.mean_absolute_error_cents.toFixed(1) }}¢</strong>
+          <span>{{ comparisonMode === "absolute" ? "ABSOLUTE MEAN ERROR" : "RELATIVE MEAN ERROR" }}</span>
+          <strong>{{ displayedMeanError?.toFixed(1) }}¢</strong>
         </article>
         <article>
           <span>GLOBAL BIAS</span>
@@ -323,11 +345,11 @@ onBeforeUnmount(() => {
         </article>
         <article>
           <span>WITHIN ±25 CENTS</span>
-          <strong>{{ summary.within_25_percent.toFixed(1) }}%</strong>
+          <strong>{{ displayedWithin25?.toFixed(1) }}%</strong>
         </article>
         <article>
           <span>WITHIN ±50 CENTS</span>
-          <strong>{{ summary.within_50_percent.toFixed(1) }}%</strong>
+          <strong>{{ displayedWithin50?.toFixed(1) }}%</strong>
         </article>
       </section>
 

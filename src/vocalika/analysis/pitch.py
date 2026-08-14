@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -41,13 +42,17 @@ class PyinPitchExtractor:
     frame_length: int = 2048
     fmin_midi: float = 36.0  # C2
     fmax_midi: float = 84.0  # C6
+    concert_pitch_hz: float = 440.0
+
+    def _midi_to_hz(self, midi: float) -> float:
+        return self.concert_pitch_hz * math.pow(2.0, (midi - 69.0) / 12.0)
 
     def extract(self, audio_path: Path) -> PitchTrack:
         audio, sample_rate = load_audio(audio_path)
         frequency, voiced, probability = librosa.pyin(
             audio,
-            fmin=float(librosa.midi_to_hz(self.fmin_midi)),
-            fmax=float(librosa.midi_to_hz(self.fmax_midi)),
+            fmin=self._midi_to_hz(self.fmin_midi),
+            fmax=self._midi_to_hz(self.fmax_midi),
             sr=sample_rate,
             frame_length=self.frame_length,
             hop_length=self.hop_length,
@@ -56,7 +61,7 @@ class PyinPitchExtractor:
         frequency = np.asarray(frequency, dtype=np.float64)
         raw_midi = np.full_like(frequency, np.nan)
         valid = np.isfinite(frequency) & (frequency > 0)
-        raw_midi[valid] = librosa.hz_to_midi(frequency[valid])
+        raw_midi[valid] = 69.0 + 12.0 * np.log2(frequency[valid] / self.concert_pitch_hz)
         times = librosa.times_like(frequency, sr=sample_rate, hop_length=self.hop_length)
         return PitchTrack(
             times=np.asarray(times, dtype=np.float64),

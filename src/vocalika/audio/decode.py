@@ -23,6 +23,7 @@ class AudioInfo:
     duration_seconds: float
     sample_rate: int
     channels: int
+    extension: str
 
     def to_dict(self) -> dict[str, str | float | int]:
         return asdict(self)
@@ -72,6 +73,7 @@ def probe_audio(path: Path) -> AudioInfo:
         duration_seconds=float(format_data.get("duration", 0.0)),
         sample_rate=int(stream["sample_rate"]),
         channels=int(stream["channels"]),
+        extension=resolved.suffix.lower(),
     )
 
 

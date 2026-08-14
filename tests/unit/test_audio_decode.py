@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import numpy as np
+import pytest
 import soundfile as sf
 
 from vocalika.audio.decode import decode_for_analysis, hash_file, load_audio, probe_audio
@@ -26,3 +28,42 @@ def test_flac_is_preserved_and_decoded_for_analysis(tmp_path: Path) -> None:
     assert decoded_rate == 16_000
     assert decoded_signal.ndim == 1
     assert hash_file(source) == original_hash
+
+
+@pytest.mark.parametrize(
+    ("extension", "codec"),
+    [("wav", "pcm_s16le"), ("mp3", "libmp3lame"), ("m4a", "aac")],
+)
+def test_expected_reference_formats_decode(
+    tmp_path: Path,
+    extension: str,
+    codec: str,
+) -> None:
+    sample_rate = 44_100
+    times = np.arange(sample_rate, dtype=np.float64) / sample_rate
+    source_wav = tmp_path / "source.wav"
+    sf.write(source_wav, 0.2 * np.sin(2.0 * np.pi * 220.0 * times), sample_rate)
+    source = tmp_path / f"reference.{extension}"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-y",
+            "-i",
+            str(source_wav),
+            "-c:a",
+            codec,
+            str(source),
+        ],
+        check=True,
+    )
+
+    info = probe_audio(source)
+    decoded = decode_for_analysis(source, tmp_path / f"{extension}-analysis.wav")
+    signal, decoded_rate = load_audio(decoded)
+
+    assert info.extension == f".{extension}"
+    assert info.sample_rate == sample_rate
+    assert decoded_rate == 16_000
+    assert signal.size > 15_000

@@ -7,6 +7,7 @@ import typer
 import uvicorn
 
 from vocalika.api.app import create_app
+from vocalika.config import AnalysisConfig
 from vocalika.pipeline import run_analysis
 from vocalika.plotting import plot_artifact
 
@@ -37,14 +38,34 @@ def analyze(
             help="Optional original mix retained for listening when reference is an isolated stem.",
         ),
     ] = None,
+    concert_pitch: Annotated[
+        float,
+        typer.Option(min=400.0, max=480.0, help="Concert A tuning in Hz."),
+    ] = 440.0,
+    minimum_midi: Annotated[
+        float,
+        typer.Option(min=0.0, max=126.0, help="Lowest expected vocal pitch as MIDI."),
+    ] = 36.0,
+    maximum_midi: Annotated[
+        float,
+        typer.Option(min=1.0, max=127.0, help="Highest expected vocal pitch as MIDI."),
+    ] = 84.0,
 ) -> None:
     """Run the Milestone 0 local-file feasibility analysis."""
+    if minimum_midi >= maximum_midi:
+        raise typer.BadParameter("--minimum-midi must be lower than --maximum-midi")
+    config = AnalysisConfig(
+        concert_pitch_hz=concert_pitch,
+        pitch_min_midi=minimum_midi,
+        pitch_max_midi=maximum_midi,
+    )
     artifact = run_analysis(
         reference,
         performance,
         output,
         reference_is_vocal=reference_is_vocal,
         reference_mix_path=reference_mix,
+        config=config,
         progress=typer.echo,
     )
     typer.echo(f"Next: vocalika plot {artifact}")

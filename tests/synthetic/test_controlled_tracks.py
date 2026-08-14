@@ -58,6 +58,8 @@ def test_recovers_global_pitch_shift(pitch_shift: float) -> None:
 
     assert comparison.global_bias_cents == pytest.approx(pitch_shift * 100.0)
     assert np.max(np.abs(comparison.relative_error_cents[comparison.valid])) < 0.01
+    assert comparison.relative_mean_absolute_error_cents < 0.01
+    assert comparison.relative_within_15_percent == 100.0
 
 
 def test_alignment_recovers_start_delay() -> None:
