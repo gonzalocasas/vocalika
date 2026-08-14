@@ -1,0 +1,1 @@
+"""Serializable analysis models."""

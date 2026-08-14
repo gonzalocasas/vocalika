@@ -1,0 +1,22 @@
+{
+  "name": "vocalika-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "typecheck": "vue-tsc -b"
+  },
+  "dependencies": {
+    "plotly.js-dist-min": "^3.0.1",
+    "vue": "^3.5.18"
+  },
+  "devDependencies": {
+    "@types/plotly.js": "^3.0.2",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.0",
+    "vue-tsc": "^3.0.4"
+  }
+}

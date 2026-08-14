@@ -798,7 +798,7 @@ Before significant UI work, implement a usable CLI.
 Example:
 
 ```bash
-vocal-compare analyze \
+vocalika analyze \
     --reference "https://youtube.com/watch?v=..." \
     --performance ./ableton-take.flac \
     --output analysis.json
@@ -817,7 +817,7 @@ No `--youtube` flag should be necessary.
 Also support:
 
 ```bash
-vocal-compare plot analysis.json
+vocalika plot analysis.json
 ```
 
 This should generate an interactive or static diagnostic visualization.
