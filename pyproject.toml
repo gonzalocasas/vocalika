@@ -13,7 +13,8 @@ authors = [{ name = "Gonzalo Casas" }]
 dependencies = [
   "fastapi>=0.116,<1",
   "librosa>=0.11,<1",
-  "numpy>=2.0,<3",
+  "numpy>=1.26,<3",
+  "platformdirs>=4.4,<5",
   "plotly>=6.0,<7",
   "python-multipart>=0.0.20,<1",
   "scipy>=1.15,<2",
@@ -29,6 +30,11 @@ dev = [
   "pytest>=8.4,<9",
   "pytest-cov>=6.2,<7",
   "ruff>=0.12,<1",
+]
+real-input = [
+  "demucs>=4.0.1,<5",
+  "numpy>=1.26,<2",
+  "yt-dlp>=2025.1.1",
 ]
 
 [project.scripts]

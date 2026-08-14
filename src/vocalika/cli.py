@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Annotated
 
@@ -7,6 +8,7 @@ import typer
 import uvicorn
 
 from vocalika.api.app import create_app
+from vocalika.cache.manager import CacheManager
 from vocalika.config import AnalysisConfig
 from vocalika.pipeline import run_analysis
 from vocalika.plotting import plot_artifact
@@ -16,7 +18,10 @@ app = typer.Typer(no_args_is_help=True, help="Analyze and compare vocal performa
 
 @app.command()
 def analyze(
-    reference: Annotated[Path, typer.Option(exists=True, dir_okay=False, readable=True)],
+    reference: Annotated[
+        str,
+        typer.Option(help="Public YouTube URL or local reference audio path."),
+    ],
     performance: Annotated[Path, typer.Option(exists=True, dir_okay=False, readable=True)],
     output: Annotated[
         Path,
@@ -50,8 +55,16 @@ def analyze(
         float,
         typer.Option(min=1.0, max=127.0, help="Highest expected vocal pitch as MIDI."),
     ] = 84.0,
+    cache_directory: Annotated[
+        Path | None,
+        typer.Option(file_okay=False, help="Override the local artifact cache directory."),
+    ] = None,
+    refresh_cache: Annotated[
+        bool,
+        typer.Option(help="Recompute downloaded and derived cache entries."),
+    ] = False,
 ) -> None:
-    """Run the Milestone 0 local-file feasibility analysis."""
+    """Acquire, prepare, and compare a reference with a local vocal performance."""
     if minimum_midi >= maximum_midi:
         raise typer.BadParameter("--minimum-midi must be lower than --maximum-midi")
     config = AnalysisConfig(
@@ -66,6 +79,8 @@ def analyze(
         reference_is_vocal=reference_is_vocal,
         reference_mix_path=reference_mix,
         config=config,
+        cache_directory=cache_directory,
+        refresh_cache=refresh_cache,
         progress=typer.echo,
     )
     typer.echo(f"Next: vocalika plot {artifact}")
@@ -91,3 +106,41 @@ def serve(
     repository_root = Path(__file__).resolve().parents[2]
     frontend_directory = repository_root / "frontend" / "dist"
     uvicorn.run(create_app(analysis, frontend_directory), host=host, port=port)
+
+
+@app.command("setup-models")
+def setup_models() -> None:
+    """Download and cache the default source-separation model."""
+    try:
+        from demucs.pretrained import get_model
+    except ImportError as error:
+        raise typer.BadParameter(
+            "Real-input dependencies are missing. Run `uv sync --extra real-input`."
+        ) from error
+    typer.echo("Downloading the htdemucs source-separation model if needed…")
+    get_model("htdemucs")
+    typer.echo("Model ready: htdemucs")
+
+
+@app.command("cache-path")
+def cache_path() -> None:
+    """Print the default local artifact cache path."""
+    typer.echo(CacheManager.default().root)
+
+
+@app.command("cache-clear")
+def cache_clear(
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help="Confirm deletion without an interactive prompt."),
+    ] = False,
+) -> None:
+    """Delete Vocalika's default downloaded and derived artifact cache."""
+    cache_root = CacheManager.default().root.resolve()
+    if not cache_root.is_dir():
+        typer.echo(f"Cache is already empty: {cache_root}")
+        return
+    if not yes and not typer.confirm(f"Delete Vocalika's cache at {cache_root}?"):
+        raise typer.Abort()
+    shutil.rmtree(cache_root)
+    typer.echo(f"Deleted cache: {cache_root}")

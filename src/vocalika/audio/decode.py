@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 import soundfile as sf
+from numpy.typing import NDArray
 
 
 class AudioDecodeError(RuntimeError):
@@ -104,7 +105,7 @@ def decode_for_analysis(source: Path, destination: Path, sample_rate: int = 16_0
     return destination
 
 
-def load_audio(path: Path) -> tuple[np.ndarray, int]:
+def load_audio(path: Path) -> tuple[NDArray[np.float32], int]:
     samples, sample_rate = sf.read(path, dtype="float32", always_2d=False)
     if samples.ndim != 1:
         samples = np.mean(samples, axis=1, dtype=np.float32)

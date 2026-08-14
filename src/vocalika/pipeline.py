@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -11,10 +12,18 @@ import numpy as np
 
 from vocalika import __version__
 from vocalika.analysis.alignment import align_pitch_tracks
-from vocalika.analysis.cleaning import clean_pitch_track
 from vocalika.analysis.comparison import compare_alignment
 from vocalika.analysis.pitch import PitchTrack, PyinPitchExtractor
-from vocalika.audio.decode import decode_for_analysis, probe_audio
+from vocalika.analysis.pitch_cache import extract_clean_pitch
+from vocalika.audio.preprocessing import normalize_for_analysis
+from vocalika.audio.separation import DemucsVocalSeparator, SeparationResult
+from vocalika.audio.sources import (
+    AudioAsset,
+    LocalAudioSource,
+    YouTubeAudioSource,
+    is_youtube_url,
+)
+from vocalika.cache.manager import CacheManager
 from vocalika.config import AnalysisConfig
 
 ProgressCallback = Callable[[str], None]
@@ -49,41 +58,81 @@ def _save_tracks(path: Path, reference: PitchTrack, performance: PitchTrack) -> 
     )
 
 
+def _acquire_reference(
+    value: str | Path,
+    cache: CacheManager,
+    *,
+    refresh: bool,
+) -> AudioAsset:
+    text = str(value)
+    if is_youtube_url(text):
+        return YouTubeAudioSource(text, cache, refresh=refresh).acquire()
+    return LocalAudioSource(Path(value)).acquire()
+
+
 def run_analysis(
-    reference_path: Path,
+    reference_path: str | Path,
     performance_path: Path,
     output: Path,
     *,
     reference_is_vocal: bool = False,
     reference_mix_path: Path | None = None,
     config: AnalysisConfig | None = None,
+    cache_directory: Path | None = None,
+    refresh_cache: bool = False,
     progress: ProgressCallback = _quiet,
 ) -> Path:
     config = config or AnalysisConfig()
+    cache = (
+        CacheManager(cache_directory.expanduser().resolve())
+        if cache_directory
+        else CacheManager.default()
+    )
     output_directory, artifact_path = _resolve_output_paths(output)
     explicit_name = artifact_path.name != "analysis.json"
     asset_prefix = f"{artifact_path.stem}." if explicit_name else ""
-    work_directory = output_directory / (
-        f"{artifact_path.stem}.working-audio" if explicit_name else "working-audio"
-    )
     output_directory.mkdir(parents=True, exist_ok=True)
 
-    progress("Inspecting input audio")
-    reference_info = probe_audio(reference_path)
-    performance_info = probe_audio(performance_path)
-    reference_mix_info = probe_audio(reference_mix_path) if reference_mix_path else None
-
-    progress("Decoding reference to analysis audio")
-    reference_wav = decode_for_analysis(
-        reference_path,
-        work_directory / "reference.wav",
-        sample_rate=config.analysis_sample_rate,
+    progress("Acquiring reference audio")
+    reference_asset = _acquire_reference(reference_path, cache, refresh=refresh_cache)
+    progress("Inspecting performance audio")
+    performance_asset = LocalAudioSource(performance_path).acquire()
+    reference_mix_asset = (
+        LocalAudioSource(reference_mix_path).acquire() if reference_mix_path else None
     )
-    progress("Decoding performance to analysis audio")
-    performance_wav = decode_for_analysis(
-        performance_path,
-        work_directory / "performance.wav",
-        sample_rate=config.analysis_sample_rate,
+
+    separation: SeparationResult | None = None
+    analysis_reference_asset = reference_asset
+    if not reference_is_vocal:
+        progress("Isolating reference vocal")
+        separation = DemucsVocalSeparator(cache, refresh=refresh_cache).separate(reference_asset)
+        separated_asset = LocalAudioSource(separation.vocals).acquire()
+        analysis_reference_asset = replace(
+            separated_asset,
+            source_type="derived_vocal",
+            title=f"{reference_asset.title or 'Reference'} — vocals",
+            source_url=reference_asset.source_url,
+            metadata={
+                **separated_asset.metadata,
+                "derived_from": reference_asset.content_hash,
+                "separation": separation.to_dict(),
+            },
+        )
+        reference_mix_asset = reference_asset
+
+    progress("Normalizing reference audio")
+    normalized_reference = normalize_for_analysis(
+        analysis_reference_asset,
+        cache,
+        config.analysis_sample_rate,
+        refresh=refresh_cache,
+    )
+    progress("Normalizing performance audio")
+    normalized_performance = normalize_for_analysis(
+        performance_asset,
+        cache,
+        config.analysis_sample_rate,
+        refresh=refresh_cache,
     )
 
     extractor = PyinPitchExtractor(
@@ -93,20 +142,33 @@ def run_analysis(
         fmax_midi=config.pitch_max_midi,
         concert_pitch_hz=config.concert_pitch_hz,
     )
+    cleaning_parameters = {
+        "confidence_threshold": config.pitch_confidence_threshold,
+        "octave_window": config.octave_window_frames,
+        "max_gap_seconds": config.max_pitch_gap_seconds,
+    }
     progress("Extracting reference pitch")
-    reference_pitch = clean_pitch_track(
-        extractor.extract(reference_wav),
-        confidence_threshold=config.pitch_confidence_threshold,
-        octave_window=config.octave_window_frames,
-        max_gap_seconds=config.max_pitch_gap_seconds,
+    cached_reference_pitch = extract_clean_pitch(
+        audio_path=normalized_reference.path,
+        content_hash=analysis_reference_asset.content_hash,
+        cache=cache,
+        extractor=extractor,
+        cleaning_parameters=cleaning_parameters,
+        pipeline_version=__version__,
+        refresh=refresh_cache,
     )
     progress("Extracting performance pitch")
-    performance_pitch = clean_pitch_track(
-        extractor.extract(performance_wav),
-        confidence_threshold=config.pitch_confidence_threshold,
-        octave_window=config.octave_window_frames,
-        max_gap_seconds=config.max_pitch_gap_seconds,
+    cached_performance_pitch = extract_clean_pitch(
+        audio_path=normalized_performance.path,
+        content_hash=performance_asset.content_hash,
+        cache=cache,
+        extractor=extractor,
+        cleaning_parameters=cleaning_parameters,
+        pipeline_version=__version__,
+        refresh=refresh_cache,
     )
+    reference_pitch = cached_reference_pitch.track
+    performance_pitch = cached_performance_pitch.track
 
     progress("Aligning pitch tracks")
     alignment = align_pitch_tracks(
@@ -138,11 +200,6 @@ def run_analysis(
         "relative_error_cents": comparison.relative_error_cents.tolist(),
     }
     warnings: list[str] = []
-    if not reference_is_vocal:
-        warnings.append(
-            "Milestone 1 does not isolate vocals. Pitch extracted from a full mix may follow "
-            "instruments or backing vocals."
-        )
     if comparison.matched_seconds < config.minimum_matched_seconds:
         warnings.append(
             f"Only {comparison.matched_seconds:.1f} seconds of confident corresponding vocal "
@@ -166,22 +223,26 @@ def run_analysis(
             "scipy_version": version("scipy"),
         },
         "reference": {
-            "source": reference_info.to_dict(),
-            "analysis_audio": str(reference_wav),
+            "source": reference_asset.to_dict(),
+            "analysis_source": analysis_reference_asset.to_dict(),
+            "analysis_audio": str(normalized_reference.path),
+            "normalization_cache_hit": normalized_reference.cache_hit,
             "conversion": {
-                "input_sample_rate": reference_info.sample_rate,
+                "input_sample_rate": analysis_reference_asset.sample_rate,
                 "analysis_sample_rate": config.analysis_sample_rate,
                 "channels": 1,
                 "sample_format": "float32_pcm",
             },
             "is_isolated_vocal": reference_is_vocal,
-            "original_mix": reference_mix_info.to_dict() if reference_mix_info else None,
+            "original_mix": reference_mix_asset.to_dict() if reference_mix_asset else None,
+            "separation": separation.to_dict() if separation else None,
         },
         "performance": {
-            "source": performance_info.to_dict(),
-            "analysis_audio": str(performance_wav),
+            "source": performance_asset.to_dict(),
+            "analysis_audio": str(normalized_performance.path),
+            "normalization_cache_hit": normalized_performance.cache_hit,
             "conversion": {
-                "input_sample_rate": performance_info.sample_rate,
+                "input_sample_rate": performance_asset.sample_rate,
                 "analysis_sample_rate": config.analysis_sample_rate,
                 "channels": 1,
                 "sample_format": "float32_pcm",
@@ -196,6 +257,8 @@ def run_analysis(
             "fmax_midi": extractor.fmax_midi,
             "concert_pitch_hz": extractor.concert_pitch_hz,
             "arrays": arrays_path.name,
+            "reference_cache_hit": cached_reference_pitch.cache_hit,
+            "performance_cache_hit": cached_performance_pitch.cache_hit,
         },
         "alignment": {
             "method": "pitch-dtw",

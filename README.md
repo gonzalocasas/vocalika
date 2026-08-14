@@ -30,16 +30,43 @@ npm --prefix frontend install
 npm --prefix frontend run build
 ```
 
-The Milestone 0 comparator accepts local files. Its reference should ideally be
-an already isolated vocal; automatic separation is a later pipeline milestone.
+Install real-input support and explicitly fetch the source-separation model:
+
+```bash
+uv sync --extra dev --extra real-input
+uv run vocalika setup-models
+```
+
+Analyze a full local mix and an Ableton FLAC:
+
+```bash
+uv run vocalika analyze \
+  --reference ./reference-mix.mp3 \
+  --performance ./ableton-take.flac \
+  --output ./analysis-output
+
+uv run vocalika plot ./analysis-output/analysis.json
+uv run vocalika serve ./analysis-output/analysis.json
+```
+
+Or use a public YouTube reference directly:
+
+```bash
+uv run vocalika analyze \
+  --reference "https://www.youtube.com/watch?v=..." \
+  --performance ./ableton-take.flac \
+  --output ./analysis-output
+```
+
+If the reference is already an isolated vocal, bypass source separation:
 
 ```bash
 uv run vocalika analyze \
   --reference ./reference-vocal.wav \
-  --performance ./ableton-take.flac \
-  --output ./analysis-output \
   --reference-is-vocal \
-  --reference-mix ./original-reference.mp3
+  --reference-mix ./original-reference.mp3 \
+  --performance ./ableton-take.flac \
+  --output ./analysis-output
 
 uv run vocalika plot ./analysis-output/analysis.json
 uv run vocalika serve ./analysis-output/analysis.json
@@ -50,12 +77,23 @@ Working audio and large pitch arrays live beside the generated analysis JSON.
 `--output` accepts either an output directory or an explicit `.json` artifact
 path.
 
-## Model downloads
+## Models and cache
 
-Milestone 0 uses pYIN and does not require learned model parameters. Later
-milestones will use pretrained models for source separation and may use one for
-pitch extraction. Their weights will be installed explicitly and cached on the
-local machine rather than downloaded silently during an analysis.
+pYIN pitch extraction does not require learned model parameters. Demucs uses a
+pretrained source-separation model; `vocalika setup-models` downloads its
+weights explicitly before the first analysis.
+
+YouTube audio, normalized working audio, Demucs stems, and compatible cleaned
+pitch tracks are cached locally. Cache keys include input content, processing
+parameters, model versions, and pipeline version where relevant.
+
+```bash
+uv run vocalika cache-path
+uv run vocalika cache-clear
+```
+
+Use `--refresh-cache` on `vocalika analyze` to recompute compatible entries, or
+`--cache-directory` to choose a different cache root.
 
 ## Quality checks
 

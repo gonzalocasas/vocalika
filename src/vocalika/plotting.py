@@ -5,12 +5,13 @@ from typing import Any
 
 import numpy as np
 import plotly.graph_objects as go
+from numpy.typing import NDArray
 from plotly.subplots import make_subplots
 
 from vocalika.models.artifact import load_artifact
 
 
-def _valid_values(values: list[float], valid: list[bool]) -> np.ndarray:
+def _valid_values(values: list[float], valid: list[bool]) -> NDArray[np.float64]:
     result = np.asarray(values, dtype=np.float64)
     result[~np.asarray(valid, dtype=np.bool_)] = np.nan
     return result
