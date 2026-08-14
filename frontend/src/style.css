@@ -36,6 +36,8 @@ h2 { margin: 4px 0 0; font-family: Georgia, "Times New Roman", serif; font-size:
 .panel { margin-top: 18px; border: 1px solid #2d3029; border-radius: 12px; background: #181a16; }
 .graph-panel { padding: 24px 22px 8px; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 9px 12px; }
+.plot-controls { display: flex; align-items: center; gap: 14px; }
+.diagnostic-toggle { display: flex; align-items: center; gap: 7px; color: #92968a; font-size: 0.78rem; white-space: nowrap; }
 .segmented { display: flex; padding: 3px; border: 1px solid #34372f; border-radius: 8px; background: #10120e; }
 .segmented button { border: 0; border-radius: 5px; padding: 7px 12px; background: transparent; color: #92968a; }
 .segmented button.active { background: #30352a; color: #e9f8c9; }
@@ -75,5 +77,6 @@ input[type="number"] { width: 86px; border: 1px solid #3b3f35; border-radius: 7p
   .source-row { grid-template-columns: 1fr; }
   .input-grid { grid-template-columns: 1fr; }
   .panel-heading, .range-controls { align-items: flex-start; flex-direction: column; }
+  .plot-controls { align-items: flex-start; flex-direction: column-reverse; margin-top: 14px; }
   .transport { flex-wrap: wrap; }
 }

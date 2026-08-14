@@ -96,8 +96,11 @@ Vocalika reports two complementary error families:
   score.
 
 Both are available in absolute mode and with global transposition compensated
-in relative mode. Stable-note regions are highlighted lightly in green in the
-pitch graph.
+in relative mode. The graphs render a lightly median-smoothed display contour,
+bridge only unobserved gaps up to 120 ms, and leave longer unvoiced passages
+open. Stable-note pitch centers appear as thick bars inside the lightly green
+regions. Enable **Raw frame points** to inspect the unchanged measurements used
+by every metric.
 
 ## Models and cache
 
@@ -125,6 +128,7 @@ uv run ruff format --check src tests
 uv run mypy
 uv run pytest
 npm --prefix frontend run build
+npm --prefix frontend test
 ```
 
 ## License

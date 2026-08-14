@@ -2,6 +2,8 @@
 import Plotly, { type PlotlyHTMLElement, type PlotRelayoutEvent } from "plotly.js-dist-min"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
 
+import { displayContour, rawContour } from "./plotData"
+
 interface Summary {
   global_bias_cents: number
   mean_absolute_error_cents: number
@@ -26,6 +28,8 @@ interface Summary {
 interface StablePitchRegion {
   reference_start: number
   reference_end: number
+  reference_center_midi: number
+  performance_center_midi: number
   error_cents: number
   relative_error_cents: number
 }
@@ -70,6 +74,7 @@ const analysisStatus = ref("")
 const selectionStart = ref(0)
 const selectionEnd = ref(30)
 const comparisonMode = ref<"absolute" | "relative">("absolute")
+const showRawPoints = ref(false)
 const looping = ref(false)
 type PlayerKind = "reference" | "reference-mix" | "performance"
 const activePlayer = ref<PlayerKind | null>(null)
@@ -174,8 +179,24 @@ async function playAB(): Promise<void> {
   sequenceTimer = window.setTimeout(() => void play("performance"), duration * 1000 + 180)
 }
 
-function masked(values: number[], valid: boolean[]): Array<number | null> {
-  return values.map((value, index) => (valid[index] ? value : null))
+function shifted(
+  values: Array<number | null>,
+  semitones: number,
+): Array<number | null> {
+  return values.map((value) => (value === null ? null : value - semitones))
+}
+
+function stableCenterTrace(
+  regions: StablePitchRegion[],
+  center: (region: StablePitchRegion) => number,
+): { x: Array<number | null>; y: Array<number | null> } {
+  const x: Array<number | null> = []
+  const y: Array<number | null> = []
+  for (const region of regions) {
+    x.push(region.reference_start, region.reference_end, null)
+    y.push(center(region), center(region), null)
+  }
+  return { x, y }
 }
 
 async function mirrorVisibleRange(
@@ -219,19 +240,37 @@ function unlinkPlotRanges(): void {
 async function renderPlots(): Promise<void> {
   if (!artifact.value || !pitchPlot.value || !errorPlot.value) return
   const frames = artifact.value.comparison.frames
-  const referencePitch = masked(frames.reference_midi, frames.valid)
-  const performancePitch = masked(frames.performance_midi, frames.valid).map((value) =>
-    value === null || comparisonMode.value === "absolute"
-      ? value
-      : value - artifact.value!.comparison.summary.global_bias_cents / 100,
-  )
-  const errorValues = masked(
-    comparisonMode.value === "absolute"
-      ? frames.absolute_error_cents
-      : frames.relative_error_cents,
+  const biasSemitones = artifact.value.comparison.summary.global_bias_cents / 100
+  const displayedBias = comparisonMode.value === "absolute" ? 0 : biasSemitones
+  const referencePitch = displayContour(
+    frames.reference_time,
+    frames.reference_midi,
     frames.valid,
   )
-  const stableRegionShapes = artifact.value.comparison.stable_pitch_regions.map((region) => ({
+  const performancePitch = shifted(
+    displayContour(frames.reference_time, frames.performance_midi, frames.valid),
+    displayedBias,
+  )
+  const errorValues = referencePitch.map((reference, index) => {
+    const performance = performancePitch[index]
+    return reference === null || performance === null ? null : 100 * (performance - reference)
+  })
+  const rawReferencePitch = rawContour(frames.reference_midi, frames.valid)
+  const rawPerformancePitch = shifted(
+    rawContour(frames.performance_midi, frames.valid),
+    displayedBias,
+  )
+  const rawErrorValues = rawContour(
+    comparisonMode.value === "absolute" ? frames.absolute_error_cents : frames.relative_error_cents,
+    frames.valid,
+  )
+  const stableRegions = artifact.value.comparison.stable_pitch_regions
+  const referenceCenters = stableCenterTrace(stableRegions, (region) => region.reference_center_midi)
+  const performanceCenters = stableCenterTrace(
+    stableRegions,
+    (region) => region.performance_center_midi - displayedBias,
+  )
+  const stableRegionShapes = stableRegions.map((region) => ({
     type: "rect" as const,
     x0: region.reference_start,
     x1: region.reference_end,
@@ -262,7 +301,8 @@ async function renderPlots(): Promise<void> {
         name: "Reference",
         type: "scattergl",
         mode: "lines",
-        line: { color: "#d5ff74", width: 2 },
+        line: { color: "#d5ff74", width: 2.5 },
+        connectgaps: false,
       },
       {
         x: frames.reference_time,
@@ -270,8 +310,47 @@ async function renderPlots(): Promise<void> {
         name: "Mine",
         type: "scattergl",
         mode: "lines",
-        line: { color: "#ff8e70", width: 2 },
+        line: { color: "#ff8e70", width: 2.5 },
+        connectgaps: false,
       },
+      {
+        ...referenceCenters,
+        name: "Reference stable centers",
+        type: "scattergl",
+        mode: "lines",
+        line: { color: "#e5ffac", width: 7 },
+        opacity: 0.72,
+        connectgaps: false,
+      },
+      {
+        ...performanceCenters,
+        name: "My stable centers",
+        type: "scattergl",
+        mode: "lines",
+        line: { color: "#ffc0af", width: 7 },
+        opacity: 0.72,
+        connectgaps: false,
+      },
+      ...(showRawPoints.value
+        ? [
+            {
+              x: frames.reference_time,
+              y: rawReferencePitch,
+              name: "Reference raw frames",
+              type: "scattergl" as const,
+              mode: "markers" as const,
+              marker: { color: "#d5ff74", size: 4, opacity: 0.38 },
+            },
+            {
+              x: frames.reference_time,
+              y: rawPerformancePitch,
+              name: "My raw frames",
+              type: "scattergl" as const,
+              mode: "markers" as const,
+              marker: { color: "#ff8e70", size: 4, opacity: 0.38 },
+            },
+          ]
+        : []),
     ],
     {
       ...baseLayout,
@@ -290,8 +369,21 @@ async function renderPlots(): Promise<void> {
         name: comparisonMode.value === "absolute" ? "Absolute error" : "Relative error",
         type: "scattergl",
         mode: "lines",
-        line: { color: "#77cfff", width: 1.5 },
+        line: { color: "#77cfff", width: 2 },
+        connectgaps: false,
       },
+      ...(showRawPoints.value
+        ? [
+            {
+              x: frames.reference_time,
+              y: rawErrorValues,
+              name: "Raw frame error",
+              type: "scattergl" as const,
+              mode: "markers" as const,
+              marker: { color: "#77cfff", size: 4, opacity: 0.38 },
+            },
+          ]
+        : []),
     ],
     {
       ...baseLayout,
@@ -541,13 +633,19 @@ onBeforeUnmount(() => {
             <span class="section-label">ALIGNED CONTOURS</span>
             <h2>Pitch movement</h2>
           </div>
-          <div class="segmented">
-            <button :class="{ active: comparisonMode === 'absolute' }" @click="comparisonMode = 'absolute'; renderPlots()">
-              Absolute
-            </button>
-            <button :class="{ active: comparisonMode === 'relative' }" @click="comparisonMode = 'relative'; renderPlots()">
-              Relative
-            </button>
+          <div class="plot-controls">
+            <label class="diagnostic-toggle">
+              <input v-model="showRawPoints" type="checkbox" @change="renderPlots" />
+              Raw frame points
+            </label>
+            <div class="segmented">
+              <button :class="{ active: comparisonMode === 'absolute' }" @click="comparisonMode = 'absolute'; renderPlots()">
+                Absolute
+              </button>
+              <button :class="{ active: comparisonMode === 'relative' }" @click="comparisonMode = 'relative'; renderPlots()">
+                Relative
+              </button>
+            </div>
           </div>
         </div>
         <div ref="pitchPlot" class="plot"></div>
@@ -558,7 +656,11 @@ onBeforeUnmount(() => {
             shaded band is within ±25 cents.
           </span>
         </div>
-        <p class="graph-hint">Zoom either chart to set the phrase used by the listening controls.</p>
+        <p class="graph-hint">
+          Contours use a light three-frame median and bridge only gaps up to 120 ms. Thick bars are
+          stable-note centers. Raw measurements and all scores remain unchanged. Zoom either chart
+          to set the listening phrase.
+        </p>
         <div ref="errorPlot" class="plot"></div>
       </section>
 
