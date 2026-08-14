@@ -39,6 +39,7 @@ h2 { margin: 4px 0 0; font-family: Georgia, "Times New Roman", serif; font-size:
 .segmented button.active { background: #30352a; color: #e9f8c9; }
 .plot { width: 100%; }
 .error-heading { display: flex; justify-content: space-between; padding: 22px 10px 0; border-top: 1px solid #2b2e27; color: #85897d; font-size: 0.78rem; }
+.graph-hint { margin: 7px 10px 0; color: #686c62; font-size: 0.75rem; }
 
 .playback-panel { padding: 26px 30px 30px; }
 .range-controls { display: flex; align-items: center; gap: 13px; margin: 24px 0 18px; color: #a8aa9f; }

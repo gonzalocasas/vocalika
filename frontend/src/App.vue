@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Plotly from "plotly.js-dist-min"
+import Plotly, { type PlotlyHTMLElement, type PlotRelayoutEvent } from "plotly.js-dist-min"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
 
 interface Summary {
@@ -48,6 +48,8 @@ type PlayerKind = "reference" | "reference-mix" | "performance"
 const activePlayer = ref<PlayerKind | null>(null)
 let stopTimer: number | undefined
 let sequenceTimer: number | undefined
+let plotsAreLinked = false
+let mirroringRange = false
 
 const summary = computed(() => artifact.value?.comparison.summary)
 const fileName = (path: string) => path.split("/").pop() ?? path
@@ -128,6 +130,37 @@ function masked(values: number[], valid: boolean[]): Array<number | null> {
   return values.map((value, index) => (valid[index] ? value : null))
 }
 
+async function mirrorVisibleRange(
+  target: PlotlyHTMLElement,
+  event: PlotRelayoutEvent,
+): Promise<void> {
+  if (mirroringRange) return
+  const update = event as unknown as Record<string, unknown>
+  const start = Number(update["xaxis.range[0]"])
+  const end = Number(update["xaxis.range[1]"])
+  mirroringRange = true
+  try {
+    if (Number.isFinite(start) && Number.isFinite(end)) {
+      selectionStart.value = Math.max(0, Math.min(start, end))
+      selectionEnd.value = Math.max(start, end)
+      await Plotly.relayout(target, { xaxis: { range: [start, end] } })
+    } else if (update["xaxis.autorange"] === true) {
+      await Plotly.relayout(target, { xaxis: { autorange: true } })
+    }
+  } finally {
+    mirroringRange = false
+  }
+}
+
+function linkPlotRanges(): void {
+  if (plotsAreLinked || !pitchPlot.value || !errorPlot.value) return
+  const pitch = pitchPlot.value as unknown as PlotlyHTMLElement
+  const pitchError = errorPlot.value as unknown as PlotlyHTMLElement
+  pitch.on("plotly_relayout", (event) => void mirrorVisibleRange(pitchError, event))
+  pitchError.on("plotly_relayout", (event) => void mirrorVisibleRange(pitch, event))
+  plotsAreLinked = true
+}
+
 async function renderPlots(): Promise<void> {
   if (!artifact.value || !pitchPlot.value || !errorPlot.value) return
   const frames = artifact.value.comparison.frames
@@ -149,6 +182,7 @@ async function renderPlots(): Promise<void> {
     font: { color: "#dddcd3", family: "Inter, ui-sans-serif, system-ui" },
     margin: { l: 58, r: 22, t: 16, b: 46 },
     hovermode: "x unified" as const,
+    uirevision: "vocalika-analysis",
     xaxis: { gridcolor: "#32352d", title: { text: "Reference time (seconds)" } },
     yaxis: { gridcolor: "#32352d" },
     legend: { orientation: "h" as const, y: 1.12 },
@@ -221,6 +255,7 @@ async function renderPlots(): Promise<void> {
     },
     { responsive: true, displaylogo: false },
   )
+  linkPlotRanges()
 }
 
 async function loadAnalysis(): Promise<void> {
@@ -319,6 +354,7 @@ onBeforeUnmount(() => {
             shaded band is within ±25 cents.
           </span>
         </div>
+        <p class="graph-hint">Zoom either chart to set the phrase used by the listening controls.</p>
         <div ref="errorPlot" class="plot"></div>
       </section>
 
