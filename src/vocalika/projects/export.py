@@ -19,6 +19,8 @@ from vocalika.projects.repository import ProjectRepository
 
 FloatAudio = NDArray[np.float32]
 ExportFormat = Literal["mp3", "wav", "flac"]
+ChannelLayout = Literal["centered", "split", "stereo_reference"]
+PerformanceChannel = Literal["left", "right"]
 
 
 @dataclass(frozen=True)
@@ -120,17 +122,56 @@ def _place_take(
     return result
 
 
-def _match_channels(audio: FloatAudio, channels: int) -> FloatAudio:
-    if audio.shape[1] == channels:
-        return audio
+def _mono(audio: FloatAudio) -> FloatAudio:
     if audio.shape[1] == 1:
-        return np.repeat(audio, channels, axis=1)
-    if channels == 1:
+        return audio
+    return np.asarray(
+        np.mean(audio, axis=1, keepdims=True, dtype=np.float32),
+        dtype=np.float32,
+    )
+
+
+def _stereo(audio: FloatAudio) -> FloatAudio:
+    if audio.shape[1] == 1:
+        return np.repeat(audio, 2, axis=1)
+    return audio[:, :2]
+
+
+def _performance_mono(audio: FloatAudio) -> FloatAudio:
+    if audio.shape[1] == 1:
+        return audio
+    channel_rms = np.sqrt(np.mean(np.square(audio, dtype=np.float64), axis=0))
+    peak_rms = float(np.max(channel_rms)) if channel_rms.size else 0.0
+    active = channel_rms >= peak_rms * 0.05
+    if peak_rms > 0 and np.any(active):
+        audio = audio[:, active]
+    return _mono(audio)
+
+
+def _route_channels(
+    instrumental: FloatAudio,
+    performance: FloatAudio,
+    *,
+    instrumental_gain: float,
+    layout: ChannelLayout,
+    performance_channel: PerformanceChannel,
+) -> FloatAudio:
+    instrumental_stereo = _stereo(instrumental)
+    performance_mono = _performance_mono(performance)[:, 0]
+    channel = 0 if performance_channel == "left" else 1
+    if layout == "centered":
         return np.asarray(
-            np.mean(audio, axis=1, keepdims=True, dtype=np.float32),
+            instrumental_stereo * instrumental_gain + performance_mono[:, None],
             dtype=np.float32,
         )
-    return audio[:, :channels]
+    if layout == "split":
+        result = np.zeros_like(instrumental_stereo)
+        result[:, channel] = performance_mono
+        result[:, 1 - channel] = _mono(instrumental_stereo)[:, 0] * instrumental_gain
+        return result
+    result = np.asarray(instrumental_stereo * instrumental_gain, dtype=np.float32)
+    result[:, channel] += performance_mono
+    return result
 
 
 def _safe_slug(value: str) -> str:
@@ -151,6 +192,8 @@ class ProjectExportService:
         *,
         instrumental_db: float = -4.0,
         output_format: ExportFormat = "mp3",
+        channel_layout: ChannelLayout = "stereo_reference",
+        performance_channel: PerformanceChannel = "right",
         preview: bool = False,
     ) -> ExportResult:
         project = self.repository.load(project_id)
@@ -185,11 +228,14 @@ class ProjectExportService:
             trim_start,
             _placement_offset_seconds(take),
         )
-        channels = max(instrumental_segment.shape[1], take_segment.shape[1])
-        instrumental_segment = _match_channels(instrumental_segment, channels)
-        take_segment = _match_channels(take_segment, channels)
         gain = float(10.0 ** (np.clip(instrumental_db, -24.0, 6.0) / 20.0))
-        mix = take_segment + instrumental_segment * gain
+        mix = _route_channels(
+            instrumental_segment,
+            take_segment,
+            instrumental_gain=gain,
+            layout=channel_layout,
+            performance_channel=performance_channel,
+        )
         peak = float(np.max(np.abs(mix))) if mix.size else 0.0
         if peak > 0.98:
             mix *= 0.98 / peak

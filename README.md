@@ -98,6 +98,9 @@ adjustable level, and provides a short preview or MP3/WAV/FLAC download.
 Browser-recorded WebM/Opus takes are decoded through ffmpeg during mixdown.
 Export uses a robust global placement offset and preserves the recorded waveform;
 the detailed contour-DTW path is intentionally never used to time-warp audible audio.
+Channel routing can center the performance over the stereo reference, hard-split
+performance and a mono reference, or overlay the performance on either side of
+the original stereo reference.
 
 The older standalone CLI analysis and artifact-library endpoints remain
 available for scripts and compatibility. A positional artifact remains optional,

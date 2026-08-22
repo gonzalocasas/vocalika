@@ -12,7 +12,12 @@ from vocalika.api.uploads import safe_upload_name, save_upload
 from vocalika.api.waveform import build_aligned_waveforms, build_waveform_envelope
 from vocalika.audio.sources import LocalAudioSource
 from vocalika.models.artifact import load_artifact
-from vocalika.projects.export import ExportFormat, ProjectExportService
+from vocalika.projects.export import (
+    ChannelLayout,
+    ExportFormat,
+    PerformanceChannel,
+    ProjectExportService,
+)
 from vocalika.projects.models import Project, Take
 from vocalika.projects.reference_audio import ReferenceAudioService
 from vocalika.projects.repository import ProjectNotFoundError
@@ -30,6 +35,8 @@ class ExportRequest(BaseModel):
     take_id: str
     instrumental_db: float = -4.0
     output_format: ExportFormat = "mp3"
+    channel_layout: ChannelLayout = "stereo_reference"
+    performance_channel: PerformanceChannel = "right"
 
 
 def _project_payload(project: Project) -> dict[str, Any]:
@@ -275,6 +282,8 @@ def create_projects_router(service: ProjectService) -> APIRouter:
                 request.take_id,
                 instrumental_db=request.instrumental_db,
                 output_format=request.output_format,
+                channel_layout=request.channel_layout,
+                performance_channel=request.performance_channel,
                 preview=preview,
             )
         except (ProjectNotFoundError, LookupError) as error:

@@ -11,6 +11,8 @@ const emit = defineEmits<{ select: [takeId: string] }>()
 const takeId = ref(props.selectedTakeId ?? props.project.takes.at(-1)?.id ?? "")
 const instrumentalDb = ref(-4)
 const outputFormat = ref<"mp3" | "wav" | "flac">("mp3")
+const channelLayout = ref<"centered" | "split" | "stereo_reference">("stereo_reference")
+const performanceChannel = ref<"left" | "right">("right")
 const busy = ref<"preview" | "render" | null>(null)
 const error = ref("")
 const previewUrl = ref("")
@@ -28,6 +30,7 @@ watch(takeId, (value) => {
   if (value) emit("select", value)
   clearPreview()
 }, { immediate: true })
+watch([instrumentalDb, channelLayout, performanceChannel], clearPreview)
 
 function clearPreview(): void {
   previewAudio.value?.pause()
@@ -49,6 +52,8 @@ async function requestExport(preview: boolean): Promise<void> {
           take_id: takeId.value,
           instrumental_db: instrumentalDb.value,
           output_format: outputFormat.value,
+          channel_layout: channelLayout.value,
+          performance_channel: performanceChannel.value,
         }),
       },
     )
@@ -123,6 +128,28 @@ onBeforeUnmount(clearPreview)
         <span>INSTRUMENTAL LEVEL <b>{{ instrumentalDb > 0 ? "+" : "" }}{{ instrumentalDb }} dB</b></span>
         <input v-model.number="instrumentalDb" type="range" min="-24" max="6" step="1" />
       </label>
+
+      <section class="channel-routing">
+        <p class="mono-eyebrow">CHANNEL ROUTING</p>
+        <div class="routing-options">
+          <button :class="{ active: channelLayout === 'centered' }" @click="channelLayout = 'centered'">
+            <strong>VOCAL CENTERED</strong><small>Performance on both channels · reference keeps its stereo image</small>
+          </button>
+          <button :class="{ active: channelLayout === 'split' }" @click="channelLayout = 'split'">
+            <strong>HARD SPLIT</strong><small>Performance on one side · mono reference on the other</small>
+          </button>
+          <button :class="{ active: channelLayout === 'stereo_reference' }" @click="channelLayout = 'stereo_reference'">
+            <strong>STEREO + SIDE VOCAL</strong><small>Reference keeps its stereo image · performance overlays one side</small>
+          </button>
+        </div>
+        <div v-if="channelLayout !== 'centered'" class="channel-side">
+          <span>PERFORMANCE CHANNEL</span>
+          <div class="segmented graphite-segmented">
+            <button :class="{ active: performanceChannel === 'left' }" @click="performanceChannel = 'left'">LEFT</button>
+            <button :class="{ active: performanceChannel === 'right' }" @click="performanceChannel = 'right'">RIGHT</button>
+          </div>
+        </div>
+      </section>
 
       <audio v-if="previewUrl" ref="previewAudio" class="export-preview" controls :src="previewUrl"></audio>
       <p v-if="error" class="inline-error">{{ error }}</p>

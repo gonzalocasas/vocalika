@@ -10,7 +10,7 @@ import soundfile as sf
 from httpx import ASGITransport, AsyncClient
 
 from vocalika.api.app import create_app
-from vocalika.projects.export import ProjectExportService
+from vocalika.projects.export import ProjectExportService, _route_channels
 from vocalika.projects.models import Project, ProjectReference, Take
 from vocalika.projects.repository import ProjectRepository
 
@@ -115,7 +115,8 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
     assert exported_rate == 44_100
     assert exported.shape == (44_100, 2)
     assert float(np.max(np.abs(exported))) > 0.15
-    mono = exported[:, 0]
+    assert float(np.max(np.abs(exported[:, 0]))) < 0.001
+    mono = exported[:, 1]
     zero_crossings = int(np.count_nonzero(np.diff(np.signbit(mono))))
     assert 420 <= zero_crossings <= 450
     assert result.filename == "practice-song_first-take_mix.wav"
@@ -140,3 +141,50 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
     assert response.headers["content-type"] == "audio/wav"
     assert "practice-song_first-take_mix.wav" in response.headers["content-disposition"]
     assert len(response.content) > 44_100
+
+
+def test_export_channel_routing_modes() -> None:
+    instrumental = np.asarray([[0.1, 0.3]], dtype=np.float32)
+    performance = np.asarray([[0.2, 0.2]], dtype=np.float32)
+
+    centered = _route_channels(
+        instrumental,
+        performance,
+        instrumental_gain=1.0,
+        layout="centered",
+        performance_channel="right",
+    )
+    split_left = _route_channels(
+        instrumental,
+        performance,
+        instrumental_gain=1.0,
+        layout="split",
+        performance_channel="left",
+    )
+    overlay_left = _route_channels(
+        instrumental,
+        performance,
+        instrumental_gain=1.0,
+        layout="stereo_reference",
+        performance_channel="left",
+    )
+    overlay_right = _route_channels(
+        instrumental,
+        performance,
+        instrumental_gain=1.0,
+        layout="stereo_reference",
+        performance_channel="right",
+    )
+    one_sided_centered = _route_channels(
+        instrumental * 0,
+        np.asarray([[0.0, 0.2]], dtype=np.float32),
+        instrumental_gain=1.0,
+        layout="centered",
+        performance_channel="right",
+    )
+
+    np.testing.assert_allclose(centered, [[0.3, 0.5]])
+    np.testing.assert_allclose(split_left, [[0.2, 0.2]])
+    np.testing.assert_allclose(overlay_left, [[0.3, 0.3]])
+    np.testing.assert_allclose(overlay_right, [[0.1, 0.5]])
+    np.testing.assert_allclose(one_sided_centered, [[0.2, 0.2]])
