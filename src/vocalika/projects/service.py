@@ -14,6 +14,7 @@ from vocalika.cache.manager import CacheManager
 from vocalika.models.artifact import load_artifact
 from vocalika.pipeline import run_analysis
 from vocalika.projects.models import Project, ProjectReference, Take
+from vocalika.projects.reference_audio import ReferenceAudioService
 from vocalika.projects.repository import ProjectRepository
 
 AnalysisRunner = Callable[..., Path]
@@ -41,6 +42,7 @@ class ProjectService:
         self.repository = repository
         self.cache = cache or CacheManager.default()
         self.analysis_runner = analysis_runner
+        self.reference_audio = ReferenceAudioService(repository)
 
     def new_id(self) -> str:
         return uuid4().hex
@@ -107,9 +109,7 @@ class ProjectService:
         lyrics: str | None = None,
     ) -> Project:
         def apply(project: Project) -> Project:
-            start = (
-                project.trim_start_seconds if trim_start_seconds is None else trim_start_seconds
-            )
+            start = project.trim_start_seconds if trim_start_seconds is None else trim_start_seconds
             end = project.trim_end_seconds if trim_end_seconds is None else trim_end_seconds
             duration = project.reference.duration_seconds
             start = max(0.0, min(float(start), duration))
@@ -153,6 +153,7 @@ class ProjectService:
             created_at=_now(),
             source_path=str(stored),
             isolate_performance=isolate_performance,
+            reference_transpose_semitones=project.transpose_semitones,
         )
         project = self.repository.update(
             project_id,
@@ -180,12 +181,22 @@ class ProjectService:
         project = self._replace_take(project, analyzing)
         output = self.repository.project_directory(project_id) / "takes" / take_id / "analysis"
         try:
+            reference_vocal = self.reference_audio.resolve(
+                project,
+                "vocal",
+                take.reference_transpose_semitones,
+            )
+            reference_mix = self.reference_audio.resolve(
+                project,
+                "mix",
+                take.reference_transpose_semitones,
+            )
             result_path = self.analysis_runner(
-                Path(project.reference.vocal_path),
+                reference_vocal,
                 Path(take.source_path),
                 output,
                 reference_is_vocal=True,
-                reference_mix_path=Path(project.reference.original_path),
+                reference_mix_path=reference_mix,
                 isolate_performance=take.isolate_performance,
                 cache_directory=self.cache.root,
             )

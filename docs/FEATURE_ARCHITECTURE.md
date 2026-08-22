@@ -20,6 +20,7 @@ FastAPI routers
   └─ project service
        ├─ project repository
        ├─ reference preparation
+       ├─ cached reference transposition
        ├─ export mixdown
        └─ existing analysis pipeline
             └─ audio / pitch / alignment primitives
@@ -42,6 +43,9 @@ analysis is calculated.
 - `vocalika.projects.export`: aligned take placement and instrumental mixdown.
   It consumes persisted project records and analysis timestamps without
   coupling the analysis pipeline to delivery formats.
+- `vocalika.projects.reference_audio`: resolves original stems and renders
+  cached, duration-preserving transposed variants for monitoring, analysis,
+  comparison, and export.
 - `vocalika.api.projects`: HTTP translation only. It validates multipart input,
   delegates work, and serves project-owned media/artifacts.
 - `vocalika.api.uploads`: shared upload filename and size policy.
@@ -70,7 +74,7 @@ project and active tab, while each feature owns its local interaction state.
 
 - Additional export encoders can consume the rendered mix without changes to
   recording, comparison, or analysis.
-- Transposition is a project setting and can be implemented as an alternate
-  prepared-reference revision. Takes retain the revision used for analysis.
+- Transposition is a cached reference-audio revision. Each take retains the
+  semitone setting used for its monitoring, analysis, comparison, and export.
 - Authentication or remote object storage can replace the repository/API
   adapters without changing the audio pipeline or Vue feature components.

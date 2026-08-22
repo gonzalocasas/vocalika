@@ -90,6 +90,7 @@ export interface Take {
   analysis_path: string | null
   analysis_summary: AnalysisSummary | null
   error: string | null
+  reference_transpose_semitones?: number
 }
 
 export interface Project {

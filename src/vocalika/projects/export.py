@@ -4,6 +4,7 @@ import math
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Literal
 
 import numpy as np
@@ -13,6 +14,7 @@ from scipy.signal import resample_poly
 
 from vocalika.models.artifact import load_artifact
 from vocalika.projects.models import Project, Take
+from vocalika.projects.reference_audio import ReferenceAudioService
 from vocalika.projects.repository import ProjectRepository
 
 FloatAudio = NDArray[np.float32]
@@ -27,7 +29,36 @@ class ExportResult:
 
 
 def _read_audio(path: Path, target_sample_rate: int) -> FloatAudio:
-    audio, sample_rate = sf.read(path, dtype="float32", always_2d=True)
+    try:
+        audio, sample_rate = sf.read(path, dtype="float32", always_2d=True)
+    except (OSError, RuntimeError, sf.LibsndfileError):
+        with TemporaryDirectory(prefix="vocalika-export-") as raw:
+            decoded = Path(raw) / "decoded.wav"
+            try:
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-v",
+                        "error",
+                        "-y",
+                        "-i",
+                        str(path),
+                        "-map",
+                        "0:a:0",
+                        "-ar",
+                        str(target_sample_rate),
+                        "-c:a",
+                        "pcm_f32le",
+                        str(decoded),
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except (FileNotFoundError, subprocess.CalledProcessError) as error:
+                detail = getattr(error, "stderr", "") or str(error)
+                raise RuntimeError(f"Unable to decode {path.name}: {detail.strip()}") from error
+            audio, sample_rate = sf.read(decoded, dtype="float32", always_2d=True)
     if sample_rate == target_sample_rate:
         return np.asarray(audio, dtype=np.float32)
     divisor = math.gcd(sample_rate, target_sample_rate)
@@ -121,6 +152,7 @@ class ProjectExportService:
     def __init__(self, repository: ProjectRepository, *, sample_rate: int = 44_100) -> None:
         self.repository = repository
         self.sample_rate = sample_rate
+        self.reference_audio = ReferenceAudioService(repository)
 
     def render(
         self,
@@ -140,10 +172,12 @@ class ProjectExportService:
         if trim_end <= trim_start:
             raise ValueError("Project trim range is empty")
 
-        instrumental = _read_audio(
-            Path(project.reference.instrumental_path),
-            self.sample_rate,
+        instrumental_path = self.reference_audio.resolve(
+            project,
+            "instrumental",
+            take.reference_transpose_semitones,
         )
+        instrumental = _read_audio(instrumental_path, self.sample_rate)
         start_sample = round(trim_start * self.sample_rate)
         output_samples = round((trim_end - trim_start) * self.sample_rate)
         instrumental_segment = instrumental[start_sample : start_sample + output_samples]

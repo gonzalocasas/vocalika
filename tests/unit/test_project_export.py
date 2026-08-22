@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -33,8 +34,23 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
 
     take_times = np.arange(sample_rate, dtype=np.float32) / sample_rate
     take_vocal = 0.2 * np.sin(2 * np.pi * 220 * take_times)
-    take_path = take_directory / "source.wav"
-    sf.write(take_path, take_vocal, sample_rate)
+    take_wav = take_directory / "recorded.wav"
+    take_path = take_directory / "source.webm"
+    sf.write(take_wav, take_vocal, sample_rate)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-y",
+            "-i",
+            str(take_wav),
+            "-c:a",
+            "libopus",
+            str(take_path),
+        ],
+        check=True,
+    )
     artifact_path = take_directory / "analysis.json"
     artifact_path.write_text(
         json.dumps(

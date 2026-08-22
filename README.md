@@ -88,9 +88,14 @@ plain text that can be pasted once and kept visible while recording. Browser
 recording uses the best Opus container supported by the browser and follows the
 same upload/analysis path as any other take.
 
+The Reference transpose control renders duration-preserving pitch-shifted stems
+on demand. Preview and recording playback use the selected key, and each new
+take remembers that setting for analysis, comparison playback, and export.
+
 The Export tab places the selected take on the reference timeline using the
 analysis correspondence, mixes it with the isolated instrumental at an
 adjustable level, and provides a short preview or MP3/WAV/FLAC download.
+Browser-recorded WebM/Opus takes are decoded through ffmpeg during mixdown.
 
 The older standalone CLI analysis and artifact-library endpoints remain
 available for scripts and compatibility. A positional artifact remains optional,

@@ -119,12 +119,12 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
       <button class="text-button" @click="recorder.discard">DISCARD & RECORD AGAIN</button>
     </template>
 
-    <audio ref="vocalAudio" preload="auto" :src="`/api/projects/${project.id}/audio/vocal`"></audio>
+    <audio ref="vocalAudio" preload="auto" :src="`/api/projects/${project.id}/audio/vocal?transpose=${project.transpose_semitones}`"></audio>
     <audio
       v-if="project.reference.instrumental_path"
       ref="instrumentalAudio"
       preload="auto"
-      :src="`/api/projects/${project.id}/audio/instrumental`"
+      :src="`/api/projects/${project.id}/audio/instrumental?transpose=${project.transpose_semitones}`"
     ></audio>
   </section>
 </template>

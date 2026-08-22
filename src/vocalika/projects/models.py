@@ -33,6 +33,7 @@ class Take:
     analysis_path: str | None = None
     analysis_summary: dict[str, Any] | None = None
     error: str | None = None
+    reference_transpose_semitones: int = 0
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> Take:

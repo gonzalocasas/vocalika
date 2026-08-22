@@ -14,6 +14,7 @@ from vocalika.audio.sources import LocalAudioSource
 from vocalika.models.artifact import load_artifact
 from vocalika.projects.export import ExportFormat, ProjectExportService
 from vocalika.projects.models import Project, Take
+from vocalika.projects.reference_audio import ReferenceAudioService
 from vocalika.projects.repository import ProjectNotFoundError
 from vocalika.projects.service import ProjectService
 
@@ -56,6 +57,7 @@ def _artifact_for_take(service: ProjectService, project_id: str, take_id: str) -
 def create_projects_router(service: ProjectService) -> APIRouter:
     router = APIRouter(prefix="/api/projects", tags=["projects"])
     export_service = ProjectExportService(service.repository)
+    reference_audio_service = ReferenceAudioService(service.repository)
 
     @router.get("")
     def list_projects() -> dict[str, list[dict[str, Any]]]:
@@ -182,18 +184,17 @@ def create_projects_router(service: ProjectService) -> APIRouter:
     def reference_audio(
         project_id: str,
         kind: Literal["mix", "vocal", "instrumental"],
+        transpose: int = 0,
     ) -> FileResponse:
         try:
-            reference = service.repository.load(project_id).reference
+            project = service.repository.load(project_id)
         except ProjectNotFoundError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
-        candidates = {
-            "mix": reference.original_path,
-            "vocal": reference.vocal_path,
-            "instrumental": reference.instrumental_path,
-        }
-        value = candidates[kind]
-        if value is None or not Path(value).is_file():
+        try:
+            value = reference_audio_service.resolve(project, kind, transpose)
+        except (OSError, RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if not value.is_file():
             raise HTTPException(status_code=404, detail=f"Reference {kind} is unavailable.")
         return FileResponse(value)
 

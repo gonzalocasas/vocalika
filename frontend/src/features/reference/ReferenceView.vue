@@ -103,6 +103,7 @@ function clampTrim(changed: "start" | "end"): void {
 }
 
 function saveTranspose(): void {
+  stop()
   emit("update", { transpose_semitones: transpose.value })
 }
 
@@ -166,12 +167,12 @@ onBeforeUnmount(stop)
         <button class="solid-button compact" @click="play">{{ playing ? "■ STOP" : "▶ PLAY" }}</button>
         <span>{{ formatTime(playhead) }} / {{ formatTime(duration) }}</span>
       </div>
-      <audio ref="vocalAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}`"></audio>
+      <audio ref="vocalAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${transpose}`"></audio>
       <audio
         v-if="project.reference.instrumental_path"
         ref="instrumentalAudio"
         preload="metadata"
-        :src="`/api/projects/${project.id}/audio/instrumental?v=${project.updated_at}`"
+        :src="`/api/projects/${project.id}/audio/instrumental?v=${project.updated_at}&transpose=${transpose}`"
       ></audio>
     </section>
 
@@ -187,7 +188,7 @@ onBeforeUnmount(stop)
             @click="transpose = step; saveTranspose()"
           >{{ step > 0 ? `+${step}` : step }}</button>
         </div>
-        <p class="feature-note">Saved as project intent. Audio transposition and automatic re-analysis are isolated for the next processing revision.</p>
+        <p class="feature-note">Applied to preview and recording playback. New takes remember this key for analysis and export.</p>
       </section>
       <section class="feature-panel compact-panel status-card">
         <p class="mono-eyebrow accent-text">SEPARATION</p>

@@ -62,12 +62,14 @@ async def test_projects_and_unanalyzed_takes_persist_across_app_instances(tmp_pa
             json={
                 "trim_start_seconds": 0.2,
                 "trim_end_seconds": 0.8,
+                "transpose_semitones": -3,
                 "lyrics": "First verse\nSecond line",
             },
         )
         assert updated.status_code == 200
         assert updated.json()["project"]["trim_start_seconds"] == 0.2
         assert updated.json()["project"]["lyrics"] == "First verse\nSecond line"
+        assert updated.json()["project"]["transpose_semitones"] == -3
 
         added = await client.post(
             f"/api/projects/{project_id}/takes",
@@ -76,6 +78,7 @@ async def test_projects_and_unanalyzed_takes_persist_across_app_instances(tmp_pa
         )
         assert added.status_code == 200
         assert added.json()["take"]["status"] == "ready"
+        assert added.json()["take"]["reference_transpose_semitones"] == -3
         assert Path(added.json()["take"]["source_path"]).is_file()
 
         browser_take = await client.post(
@@ -85,9 +88,7 @@ async def test_projects_and_unanalyzed_takes_persist_across_app_instances(tmp_pa
         )
         assert browser_take.status_code == 200
         browser_take_id = browser_take.json()["take"]["id"]
-        waveform = await client.get(
-            f"/api/projects/{project_id}/takes/{browser_take_id}/waveform"
-        )
+        waveform = await client.get(f"/api/projects/{project_id}/takes/{browser_take_id}/waveform")
         assert waveform.status_code == 200
         assert len(waveform.json()["amplitude"]) == 100
 
