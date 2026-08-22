@@ -149,7 +149,7 @@ onBeforeUnmount(clearPreview)
         <div><span>TAKE</span><b>{{ selectedTake ? "READY" : "MISSING" }}</b></div>
         <div><span>INSTRUMENTAL</span><b>{{ project.reference.instrumental_path ? "READY" : "MISSING" }}</b></div>
         <div><span>ALIGNMENT</span><b>{{ selectedTake?.analysis_path ? "ANALYZED" : "BASIC" }}</b></div>
-        <p>The analyzed timestamp correspondence is used to place your vocal on the reference timeline.</p>
+        <p>Alignment places your vocal on the reference timeline. Natural timing is preserved without audible time-stretching.</p>
       </section>
     </aside>
   </section>

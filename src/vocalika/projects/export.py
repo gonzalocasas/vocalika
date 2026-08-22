@@ -78,55 +78,45 @@ def _take_vocal_path(take: Take) -> Path:
     return Path(source["path"])
 
 
-def _alignment_map(take: Take) -> tuple[NDArray[np.float64], NDArray[np.float64]] | None:
+def _placement_offset_seconds(take: Take) -> float:
     if take.analysis_path is None:
-        return None
+        return 0.0
     artifact = load_artifact(Path(take.analysis_path))
+    alignment = artifact.get("alignment", {})
+    global_offset = alignment.get("global_offset_seconds")
+    confidence = float(alignment.get("global_offset_confidence") or 0.0)
+    if global_offset is not None and np.isfinite(global_offset) and confidence >= 0.25:
+        return float(global_offset)
     frames = artifact["comparison"]["frames"]
     reference = np.asarray(frames["reference_time"], dtype=np.float64)
     performance = np.asarray(frames["performance_time"], dtype=np.float64)
     finite = np.isfinite(reference) & np.isfinite(performance)
-    reference = reference[finite]
-    performance = performance[finite]
-    if reference.size < 2:
-        return None
-    unique_reference = np.unique(reference)
-    mapped_performance = np.asarray(
-        [np.median(performance[reference == time]) for time in unique_reference],
-        dtype=np.float64,
-    )
-    return unique_reference, mapped_performance
+    if not np.any(finite):
+        return 0.0
+    return float(np.median(performance[finite] - reference[finite]))
 
 
-def _warp_take(
+def _place_take(
     take_audio: FloatAudio,
     sample_rate: int,
-    reference_times: NDArray[np.float64],
-    mapping: tuple[NDArray[np.float64], NDArray[np.float64]] | None,
+    output_samples: int,
     trim_start: float,
+    performance_offset: float,
 ) -> FloatAudio:
-    if mapping is None:
-        performance_times = reference_times - trim_start
-    else:
-        performance_times = np.interp(
-            reference_times,
-            mapping[0],
-            mapping[1],
-            left=np.nan,
-            right=np.nan,
-        )
-    positions = performance_times * sample_rate
-    source_positions = np.arange(take_audio.shape[0], dtype=np.float64)
-    result = np.zeros((reference_times.size, take_audio.shape[1]), dtype=np.float32)
-    valid = np.isfinite(positions)
-    for channel in range(take_audio.shape[1]):
-        result[valid, channel] = np.interp(
-            positions[valid],
-            source_positions,
-            take_audio[:, channel],
-            left=0.0,
-            right=0.0,
-        )
+    result = np.zeros((output_samples, take_audio.shape[1]), dtype=np.float32)
+    source_start = round((trim_start + performance_offset) * sample_rate)
+    destination_start = 0
+    if source_start < 0:
+        destination_start = min(output_samples, -source_start)
+        source_start = 0
+    available = min(
+        output_samples - destination_start,
+        take_audio.shape[0] - source_start,
+    )
+    if available > 0:
+        result[destination_start : destination_start + available] = take_audio[
+            source_start : source_start + available
+        ]
     return result
 
 
@@ -188,15 +178,12 @@ class ProjectExportService:
             )
 
         take_audio = _read_audio(_take_vocal_path(take), self.sample_rate)
-        reference_times = (
-            trim_start + np.arange(output_samples, dtype=np.float64) / self.sample_rate
-        )
-        take_segment = _warp_take(
+        take_segment = _place_take(
             take_audio,
             self.sample_rate,
-            reference_times,
-            _alignment_map(take),
+            output_samples,
             trim_start,
+            _placement_offset_seconds(take),
         )
         channels = max(instrumental_segment.shape[1], take_segment.shape[1])
         instrumental_segment = _match_channels(instrumental_segment, channels)

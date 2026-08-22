@@ -96,6 +96,8 @@ The Export tab places the selected take on the reference timeline using the
 analysis correspondence, mixes it with the isolated instrumental at an
 adjustable level, and provides a short preview or MP3/WAV/FLAC download.
 Browser-recorded WebM/Opus takes are decoded through ffmpeg during mixdown.
+Export uses a robust global placement offset and preserves the recorded waveform;
+the detailed contour-DTW path is intentionally never used to time-warp audible audio.
 
 The older standalone CLI analysis and artifact-library endpoints remain
 available for scripts and compatibility. A positional artifact remains optional,

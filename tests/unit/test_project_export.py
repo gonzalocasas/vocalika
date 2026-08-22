@@ -63,7 +63,7 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
                 "comparison": {
                     "frames": {
                         "reference_time": [0.25, 0.5, 0.75, 1.0, 1.25],
-                        "performance_time": [0.0, 0.25, 0.5, 0.75, 1.0],
+                        "performance_time": [0.0, 0.25, 0.25, 0.75, 1.0],
                     }
                 },
             }
@@ -115,6 +115,9 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
     assert exported_rate == 44_100
     assert exported.shape == (44_100, 2)
     assert float(np.max(np.abs(exported))) > 0.15
+    mono = exported[:, 0]
+    zero_crossings = int(np.count_nonzero(np.diff(np.signbit(mono))))
+    assert 420 <= zero_crossings <= 450
     assert result.filename == "practice-song_first-take_mix.wav"
     assert result.media_type == "audio/wav"
 
