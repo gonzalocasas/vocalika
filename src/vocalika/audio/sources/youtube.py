@@ -71,7 +71,45 @@ class YouTubeAudioSource:
             command.insert(1, "--force-overwrites")
         try:
             result = subprocess.run(command, check=True, capture_output=True, text=True)
-        except (FileNotFoundError, subprocess.CalledProcessError) as error:
+        except FileNotFoundError as error:
+            raise YouTubeAcquisitionError(
+                "Unable to retrieve this YouTube reference because yt-dlp is not installed. "
+                "Run `uv sync --extra real-input`, or provide a local audio file instead."
+            ) from error
+        except subprocess.CalledProcessError as default_error:
+            # YouTube increasingly requires a signed JavaScript challenge for
+            # media URLs returned by its default android_vr client. Some URLs
+            # expose metadata normally but reject the complete media transfer
+            # with HTTP 403. The embedded client plus yt-dlp's official EJS
+            # component is a reliable fallback for embeddable public videos.
+            fallback_command = command.copy()
+            fallback_options = [
+                "--remote-components",
+                "ejs:github",
+                "--extractor-args",
+                "youtube:player_client=web_embedded",
+            ]
+            if "--force-overwrites" not in fallback_command:
+                fallback_options.insert(0, "--force-overwrites")
+            fallback_command[1:1] = fallback_options
+            try:
+                result = subprocess.run(
+                    fallback_command,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as fallback_error:
+                default_detail = default_error.stderr.strip()
+                fallback_detail = fallback_error.stderr.strip()
+                raise YouTubeAcquisitionError(
+                    "Unable to retrieve this YouTube reference. The normal media request and "
+                    "the signed embedded-client fallback both failed. Check that the video is "
+                    "public and embeddable, or provide a local audio file instead. "
+                    f"Default details: {default_detail or default_error}. "
+                    f"Fallback details: {fallback_detail or fallback_error}"
+                ) from fallback_error
+        except OSError as error:
             detail = getattr(error, "stderr", "") or str(error)
             raise YouTubeAcquisitionError(
                 "Unable to retrieve this YouTube reference. Check that it is public and "

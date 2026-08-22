@@ -98,7 +98,16 @@ def test_clean_pitch_is_cached_by_content_and_parameters(tmp_path: Path) -> None
         cleaning_parameters=parameters,
         pipeline_version="test",
     )
+    without_harmonic_preprocessing = extract_clean_pitch(
+        audio_path=source,
+        content_hash=asset.content_hash,
+        cache=cache,
+        extractor=PyinPitchExtractor(harmonic_margin=0.0),
+        cleaning_parameters=parameters,
+        pipeline_version="test",
+    )
 
     assert not first.cache_hit
     assert second.cache_hit
+    assert not without_harmonic_preprocessing.cache_hit
     np.testing.assert_array_equal(first.track.midi, second.track.midi)

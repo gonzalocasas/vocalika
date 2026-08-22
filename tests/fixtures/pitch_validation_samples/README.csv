@@ -1,0 +1,14 @@
+test_file,reference_file,expected_global_bias_cents,expected_abs_mae_cents,notes
+01_test_identical.wav,01_ref_A4_440Hz.wav,0,0,Static tone; expected bias/MAE in cents
+01_test_plus25c.wav,01_ref_A4_440Hz.wav,25,25,Static tone; expected bias/MAE in cents
+01_test_minus50c.wav,01_ref_A4_440Hz.wav,-50,50,Static tone; expected bias/MAE in cents
+01_test_plus100c.wav,01_ref_A4_440Hz.wav,100,100,Static tone; expected bias/MAE in cents
+01_test_minus190c.wav,01_ref_A4_440Hz.wav,-190,190,Static tone; expected bias/MAE in cents
+01_test_plus200c.wav,01_ref_A4_440Hz.wav,200,200,Static tone; expected bias/MAE in cents
+01_test_octave_down.wav,01_ref_A4_440Hz.wav,-1200,1200,Static tone; expected bias/MAE in cents
+02_test_identical.wav,02_ref_C4_D4_E4_G4.wav,0,0,"Four-note melody, uniform transposition"
+02_test_minus190c.wav,02_ref_C4_D4_E4_G4.wav,-190,190,"Four-note melody, uniform transposition"
+02_test_plus200c.wav,02_ref_C4_D4_E4_G4.wav,200,200,"Four-note melody, uniform transposition"
+03_test_same_melody_plus250ms.wav,02_ref_C4_D4_E4_G4.wav,0,0,Same melody delayed 250 ms; after alignment should approach zero
+04_test_same_melody_vibrato_pm30c_5Hz.wav,02_ref_C4_D4_E4_G4.wav,0,,"±30c, 5 Hz vibrato; bias ~0, contour MAE > 0, note-center MAE ~0"
+05_test_one_wrong_note_E4_to_F4.wav,02_ref_C4_D4_E4_G4.wav,,,One of four notes +100c; ideal note-center mean absolute error ~25c

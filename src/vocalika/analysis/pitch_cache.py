@@ -35,6 +35,7 @@ def extract_clean_pitch(
         "fmin_midi": extractor.fmin_midi,
         "fmax_midi": extractor.fmax_midi,
         "concert_pitch_hz": extractor.concert_pitch_hz,
+        "harmonic_margin": extractor.harmonic_margin,
         "cleaning": cleaning_parameters,
     }
     path = cache.pitch_path(content_hash, parameters)

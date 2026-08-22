@@ -43,14 +43,20 @@ class PyinPitchExtractor:
     fmin_midi: float = 36.0  # C2
     fmax_midi: float = 84.0  # C6
     concert_pitch_hz: float = 440.0
+    harmonic_margin: float = 1.0
 
     def _midi_to_hz(self, midi: float) -> float:
         return self.concert_pitch_hz * math.pow(2.0, (midi - 69.0) / 12.0)
 
     def extract(self, audio_path: Path) -> PitchTrack:
         audio, sample_rate = load_audio(audio_path)
+        analysis_audio = (
+            librosa.effects.harmonic(audio, margin=self.harmonic_margin)
+            if self.harmonic_margin > 0.0
+            else audio
+        )
         frequency, voiced, probability = librosa.pyin(
-            audio,
+            analysis_audio,
             fmin=self._midi_to_hz(self.fmin_midi),
             fmax=self._midi_to_hz(self.fmax_midi),
             sr=sample_rate,
@@ -70,7 +76,11 @@ class PyinPitchExtractor:
             midi=raw_midi.copy(),
             confidence=np.nan_to_num(np.asarray(probability, dtype=np.float64)),
             voiced=np.asarray(voiced, dtype=np.bool_),
-            extractor="librosa.pyin",
+            extractor=(
+                f"librosa.pyin+hpss-harmonic-{self.harmonic_margin:g}"
+                if self.harmonic_margin > 0.0
+                else "librosa.pyin"
+            ),
             sample_rate=sample_rate,
             hop_length=self.hop_length,
         )

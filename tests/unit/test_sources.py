@@ -79,3 +79,53 @@ def test_youtube_source_downloads_once_then_uses_cache(
     assert first == second
     assert first.title == "Reference title"
     assert first.metadata["video_id"] == "video-123"
+
+
+def test_youtube_source_retries_403_with_signed_embedded_client(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    cache = CacheManager(tmp_path / "cache")
+    original_run = subprocess.run
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if command[0] != "yt-dlp":
+            return original_run(command, **kwargs)
+        calls.append(command)
+        if len(calls) == 1:
+            raise subprocess.CalledProcessError(
+                1,
+                command,
+                stderr="ERROR: unable to download video data: HTTP Error 403: Forbidden",
+            )
+        output_template = Path(command[command.index("--output") + 1])
+        audio_path = output_template.with_name("source.wav")
+        write_wav(audio_path)
+        (audio_path.parent / "source.info.json").write_text(
+            json.dumps(
+                {
+                    "id": "video-403",
+                    "title": "Recovered reference",
+                    "webpage_url": "https://www.youtube.com/watch?v=video-403",
+                    "duration": 1.0,
+                    "extractor_key": "Youtube",
+                    "format_id": "test",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=f"{audio_path}\n", stderr="")
+
+    monkeypatch.setattr("vocalika.audio.sources.youtube.subprocess.run", fake_run)
+
+    asset = YouTubeAudioSource("https://youtu.be/video-403", cache).acquire()
+
+    assert len(calls) == 2
+    assert calls[1][calls[1].index("--remote-components") + 1] == "ejs:github"
+    assert (
+        calls[1][calls[1].index("--extractor-args") + 1]
+        == "youtube:player_client=web_embedded"
+    )
+    assert "--force-overwrites" in calls[1]
+    assert asset.title == "Recovered reference"

@@ -3,19 +3,129 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
+import soundfile as sf
 from httpx import ASGITransport, AsyncClient
 
 from vocalika.api.app import create_app
+
+
+def write_minimal_artifact(
+    path: Path,
+    *,
+    created_at: str = "2026-08-21T10:00:00+00:00",
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "created_at": created_at,
+                "reference": {"source": {"path": "/audio/reference.mp3"}},
+                "performance": {"source": {"path": "/audio/performance.flac"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.anyio
+async def test_app_starts_without_an_active_analysis(tmp_path: Path) -> None:
+    app = create_app(None, library_directory=tmp_path / "analyses")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        assert (await client.get("/api/analysis")).json() is None
+        assert (await client.get("/api/audio/reference")).status_code == 404
+        assert (await client.get("/api/waveforms")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_aligned_waveform_envelopes_are_served(tmp_path: Path) -> None:
+    sample_rate = 8_000
+    times = np.arange(sample_rate, dtype=np.float32) / sample_rate
+    reference_audio = tmp_path / "reference.wav"
+    performance_audio = tmp_path / "performance.wav"
+    sf.write(reference_audio, 0.4 * np.sin(2 * np.pi * 220 * times), sample_rate)
+    sf.write(performance_audio, 0.2 * np.sin(2 * np.pi * 330 * times), sample_rate)
+    artifact_path = tmp_path / "analysis.json"
+    artifact_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "created_at": "2026-08-21",
+                "reference": {
+                    "analysis_audio": str(reference_audio),
+                    "source": {"path": str(reference_audio)},
+                },
+                "performance": {
+                    "analysis_audio": str(performance_audio),
+                    "source": {"path": str(performance_audio)},
+                },
+                "comparison": {
+                    "frames": {
+                        "reference_time": [0.1, 0.3, 0.5, 0.7],
+                        "performance_time": [0.2, 0.4, 0.6, 0.8],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    app = create_app(artifact_path)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/waveforms")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["time"] == [0.1, 0.3, 0.5, 0.7]
+    assert len(payload["reference_amplitude"]) == 4
+    assert len(payload["performance_amplitude"]) == 4
+    assert max(payload["reference_amplitude"]) <= 1.0
+
+
+@pytest.mark.anyio
+async def test_saved_analyses_can_be_listed_and_selected(tmp_path: Path) -> None:
+    library = tmp_path / "analyses"
+    write_minimal_artifact(library / "older" / "analysis.json", created_at="2026-08-20")
+    write_minimal_artifact(library / "newer" / "analysis.json", created_at="2026-08-21")
+    (library / "not-an-analysis.json").write_text('{"hello": "world"}', encoding="utf-8")
+    outside = tmp_path / "outside.json"
+    write_minimal_artifact(outside)
+    app = create_app(None, library_directory=library)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        listing = (await client.get("/api/analyses")).json()["analyses"]
+        assert [item["id"] for item in listing] == [
+            "newer/analysis.json",
+            "older/analysis.json",
+        ]
+        assert listing[0]["reference_name"] == "reference.mp3"
+
+        selected = await client.post(
+            "/api/analyses/select",
+            json={"id": "newer/analysis.json"},
+        )
+        assert selected.status_code == 200
+        assert (await client.get("/api/analysis")).json()["created_at"] == "2026-08-21"
+
+        traversal = await client.post(
+            "/api/analyses/select",
+            json={"id": "../outside.json"},
+        )
+        assert traversal.status_code == 400
 
 
 @pytest.mark.anyio
 async def test_analysis_and_audio_are_served_locally(tmp_path: Path) -> None:
     reference = tmp_path / "reference.wav"
     performance = tmp_path / "performance.flac"
+    performance_vocal = tmp_path / "performance-vocal.wav"
     original_mix = tmp_path / "original-mix.mp3"
     reference.write_bytes(b"reference-audio")
     performance.write_bytes(b"performance-audio")
+    performance_vocal.write_bytes(b"isolated-performance-audio")
     original_mix.write_bytes(b"original-mix-audio")
     artifact_path = tmp_path / "analysis.json"
     artifact_path.write_text(
@@ -27,7 +137,13 @@ async def test_analysis_and_audio_are_served_locally(tmp_path: Path) -> None:
                     "source": {"path": str(reference)},
                     "original_mix": {"path": str(original_mix)},
                 },
-                "performance": {"source": {"path": str(performance)}},
+                "performance": {
+                    "analysis_audio": str(performance_vocal),
+                    "analysis_source": {"path": str(performance_vocal)},
+                    "source": {"path": str(performance)},
+                    "original_mix": {"path": str(performance)},
+                    "isolation_applied": True,
+                },
             }
         ),
         encoding="utf-8",
@@ -39,7 +155,8 @@ async def test_analysis_and_audio_are_served_locally(tmp_path: Path) -> None:
         assert (await client.get("/api/analysis")).json()["schema_version"] == "0.1.0"
         assert (await client.get("/api/audio/reference")).content == b"reference-audio"
         assert (await client.get("/api/audio/reference-mix")).content == b"original-mix-audio"
-        assert (await client.get("/api/audio/performance")).content == b"performance-audio"
+        assert (await client.get("/api/audio/performance")).content == b"isolated-performance-audio"
+        assert (await client.get("/api/audio/performance-mix")).content == b"performance-audio"
 
 
 @pytest.mark.anyio
@@ -70,11 +187,13 @@ async def test_uploaded_analysis_is_saved_and_becomes_active(tmp_path: Path) -> 
         output: Path,
         *,
         reference_is_vocal: bool,
+        isolate_performance: bool,
     ) -> Path:
         captured.update(
             reference=reference,
             performance=performance,
             reference_is_vocal=reference_is_vocal,
+            isolate_performance=isolate_performance,
         )
         output.mkdir(parents=True)
         result_path = output / "analysis.json"
@@ -103,7 +222,7 @@ async def test_uploaded_analysis_is_saved_and_becomes_active(tmp_path: Path) -> 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/analyze",
-            data={"reference_is_vocal": "true"},
+            data={"reference_is_vocal": "true", "isolate_performance": "true"},
             files={
                 "reference_file": ("my mix.mp3", b"new-reference", "audio/mpeg"),
                 "performance_file": ("ableton.flac", b"new-performance", "audio/flac"),
@@ -117,6 +236,7 @@ async def test_uploaded_analysis_is_saved_and_becomes_active(tmp_path: Path) -> 
         assert Path(captured["reference"]).read_bytes() == b"new-reference"
         assert Path(captured["performance"]).read_bytes() == b"new-performance"
         assert captured["reference_is_vocal"] is True
+        assert captured["isolate_performance"] is True
 
 
 @pytest.mark.anyio

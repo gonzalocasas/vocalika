@@ -20,6 +20,9 @@ frontend/vite.config.d.ts
 .vocalika/
 analysis-output/
 
+# Open datasets are fetched on demand and must not be committed.
+tests/external-data/
+
 # Personal/copyrighted audio fixtures stay local.
 samples/*
 !samples/.gitkeep

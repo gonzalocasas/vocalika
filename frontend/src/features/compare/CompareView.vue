@@ -1,0 +1,253 @@
+<script setup lang="ts">
+import type { PlotlyHTMLElement, PlotRelayoutEvent } from "plotly.js-dist-min"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
+
+import { calculateRangeSummary } from "../../metrics"
+import { displayContour, rawContour } from "../../plotData"
+import { apiJson } from "../../shared/api"
+import type { AlignedWaveforms, AnalysisArtifact, Project, Take } from "../../shared/types"
+
+const props = defineProps<{ project: Project; take: Take; artifact: AnalysisArtifact }>()
+
+const pitchPlot = ref<HTMLDivElement | null>(null)
+const confidencePlot = ref<HTMLDivElement | null>(null)
+const errorPlot = ref<HTMLDivElement | null>(null)
+const waveforms = ref<AlignedWaveforms | null>(null)
+const metricScope = ref<"full" | "selection">("full")
+const comparisonMode = ref<"absolute" | "relative">("absolute")
+const showReference = ref(true)
+const showPerformance = ref(true)
+const showWaveforms = ref(true)
+const showPoints = ref(false)
+const times = props.artifact.comparison.frames.reference_time
+const selectionStart = ref(times[0] ?? 0)
+const selectionEnd = ref(Math.min(times.at(-1) ?? 30, 30))
+const looping = ref(false)
+const activePlayer = ref<"reference" | "mix" | "take" | null>(null)
+const referenceAudio = ref<HTMLAudioElement | null>(null)
+const mixAudio = ref<HTMLAudioElement | null>(null)
+const takeAudio = ref<HTMLAudioElement | null>(null)
+let plotly: typeof import("plotly.js-dist-min")["default"] | null = null
+let linked = false
+let mirroring = false
+let stopTimer: number | undefined
+
+async function loadPlotly(): Promise<typeof import("plotly.js-dist-min")["default"]> {
+  if (!plotly) plotly = (await import("plotly.js-dist-min")).default
+  return plotly
+}
+
+const selectedSummary = computed(() => calculateRangeSummary(
+  props.artifact.comparison.frames,
+  props.artifact.comparison.stable_pitch_regions ?? [],
+  selectionStart.value,
+  selectionEnd.value,
+  props.artifact.alignment?.frames_per_second ?? 10,
+))
+const summary = computed(() => metricScope.value === "full"
+  ? props.artifact.comparison.summary
+  : selectedSummary.value)
+const meanError = computed(() => comparisonMode.value === "absolute"
+  ? summary.value?.mean_absolute_error_cents
+  : summary.value?.relative_mean_absolute_error_cents)
+const within25 = computed(() => comparisonMode.value === "absolute"
+  ? summary.value?.within_25_percent
+  : summary.value?.relative_within_25_percent)
+const within50 = computed(() => comparisonMode.value === "absolute"
+  ? summary.value?.within_50_percent
+  : summary.value?.relative_within_50_percent)
+const stableError = computed(() => comparisonMode.value === "absolute"
+  ? summary.value?.stable_note_pitch_center_mae_cents
+  : summary.value?.relative_stable_note_pitch_center_mae_cents)
+
+function metric(value: number | null | undefined, suffix: string): string {
+  return value === null || value === undefined ? "—" : `${value.toFixed(1)}${suffix}`
+}
+
+function accepted(track: "reference" | "performance"): boolean[] {
+  const frames = props.artifact.comparison.frames
+  const confidence = track === "reference" ? frames.reference_confidence : frames.performance_confidence
+  const voiced = track === "reference" ? frames.reference_voiced : frames.performance_voiced
+  if (!confidence || !voiced) return frames.valid
+  const threshold = props.artifact.configuration?.pitch_confidence_threshold ?? 0.55
+  return frames.reference_time.map((_, index) => Boolean(voiced[index]) && (confidence[index] ?? 0) >= threshold)
+}
+
+function shifted(values: Array<number | null>, amount: number): Array<number | null> {
+  return values.map((value) => value === null ? null : value - amount)
+}
+
+function waveformPolygon(time: number[], amplitude: number[]): { x: number[]; y: number[] } {
+  return { x: [...time, ...[...time].reverse()], y: [...amplitude, ...[...amplitude].reverse().map((value) => -value)] }
+}
+
+function plotElements(): PlotlyHTMLElement[] {
+  return [pitchPlot.value, confidencePlot.value, errorPlot.value]
+    .filter((value): value is HTMLDivElement => value !== null)
+    .map((value) => value as unknown as PlotlyHTMLElement)
+}
+
+async function mirror(source: PlotlyHTMLElement, event: PlotRelayoutEvent): Promise<void> {
+  if (mirroring) return
+  const update = event as unknown as Record<string, unknown>
+  const start = Number(update["xaxis.range[0]"])
+  const end = Number(update["xaxis.range[1]"])
+  mirroring = true
+  try {
+    const Plotly = await loadPlotly()
+    if (Number.isFinite(start) && Number.isFinite(end)) {
+      selectionStart.value = Math.max(0, Math.min(start, end))
+      selectionEnd.value = Math.max(start, end)
+      await Promise.all(plotElements().filter((plot) => plot !== source).map((plot) => Plotly.relayout(plot, { xaxis: { range: [start, end] } })))
+    }
+  } finally {
+    mirroring = false
+  }
+}
+
+function linkPlots(): void {
+  if (linked || plotElements().length !== 3) return
+  for (const plot of plotElements()) plot.on("plotly_relayout", (event) => void mirror(plot, event))
+  linked = true
+}
+
+function unlinkPlots(): void {
+  for (const plot of plotElements()) plot.removeAllListeners("plotly_relayout")
+  linked = false
+}
+
+async function render(): Promise<void> {
+  if (!pitchPlot.value || !confidencePlot.value || !errorPlot.value) return
+  const Plotly = await loadPlotly()
+  const frames = props.artifact.comparison.frames
+  const referenceAccepted = accepted("reference")
+  const performanceAccepted = accepted("performance")
+  const bias = comparisonMode.value === "relative" ? props.artifact.comparison.summary.global_bias_cents / 100 : 0
+  const referencePitch = displayContour(frames.reference_time, frames.reference_midi, referenceAccepted)
+  const performancePitch = shifted(displayContour(frames.reference_time, frames.performance_midi, performanceAccepted), bias)
+  const error = referencePitch.map((value, index) => value === null || performancePitch[index] === null ? null : 100 * (performancePitch[index]! - value))
+  const refConfidence = frames.reference_confidence ?? frames.confidence
+  const perfConfidence = frames.performance_confidence ?? frames.confidence
+  const threshold = 100 * (props.artifact.configuration?.pitch_confidence_threshold ?? 0.55)
+  const base = {
+    paper_bgcolor: "#0e1112",
+    plot_bgcolor: "#0e1112",
+    font: { color: "#7c817f", family: "IBM Plex Mono, monospace", size: 10 },
+    margin: { l: 52, r: 18, t: 18, b: 42 },
+    hovermode: "x unified" as const,
+    uirevision: props.artifact.created_at,
+    xaxis: { gridcolor: "#262b2c", title: { text: "Reference time (seconds)" } },
+    yaxis: { gridcolor: "#262b2c" },
+  }
+  const referenceWave = waveforms.value ? waveformPolygon(waveforms.value.time, waveforms.value.reference_amplitude) : null
+  const performanceWave = waveforms.value ? waveformPolygon(waveforms.value.time, waveforms.value.performance_amplitude) : null
+  await Plotly.react(pitchPlot.value, [
+    ...(showWaveforms.value && referenceWave ? [{ ...referenceWave, type: "scatter" as const, mode: "lines" as const, fill: "toself" as const, yaxis: "y2", line: { width: 0 }, fillcolor: "rgba(232,226,214,.08)", hoverinfo: "skip" as const, showlegend: false }] : []),
+    ...(showWaveforms.value && performanceWave ? [{ ...performanceWave, type: "scatter" as const, mode: "lines" as const, fill: "toself" as const, yaxis: "y2", line: { width: 0 }, fillcolor: "rgba(217,153,46,.08)", hoverinfo: "skip" as const, showlegend: false }] : []),
+    { x: frames.reference_time, y: referencePitch, name: "Reference", visible: showReference.value, type: "scattergl", mode: "lines", line: { color: "#e8e2d6", width: 2.2 }, connectgaps: false },
+    { x: frames.reference_time, y: performancePitch, name: "Mine", visible: showPerformance.value, type: "scattergl", mode: "lines", line: { color: "#d9992e", width: 2.2 }, connectgaps: false },
+    ...(showPoints.value ? [
+      { x: frames.reference_time, y: rawContour(frames.reference_midi, referenceAccepted), name: "Reference points", type: "scattergl" as const, mode: "markers" as const, marker: { color: "#e8e2d6", size: 3, opacity: .35 } },
+      { x: frames.reference_time, y: shifted(rawContour(frames.performance_midi, performanceAccepted), bias), name: "Mine points", type: "scattergl" as const, mode: "markers" as const, marker: { color: "#d9992e", size: 3, opacity: .35 } },
+    ] : []),
+  ], { ...base, height: 320, yaxis: { ...base.yaxis, title: { text: "Continuous MIDI" } }, yaxis2: { overlaying: "y", range: [-1.05, 1.05], visible: false, fixedrange: true } }, { responsive: true, displaylogo: false })
+
+  await Plotly.react(confidencePlot.value, [
+    { x: frames.reference_time, y: refConfidence.map((value) => 100 * value), name: "Reference", type: "scattergl", mode: "lines", line: { color: "#4f8d7b", width: 1.6 } },
+    { x: frames.reference_time, y: perfConfidence.map((value) => 100 * value), name: "Mine", type: "scattergl", mode: "lines", line: { color: "#c96f3e", width: 1.6 } },
+  ], { ...base, height: 220, shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: threshold, y1: threshold, line: { color: "#3a4040", dash: "dash", width: 1 } }], yaxis: { ...base.yaxis, range: [0, 100], title: { text: "Confidence %" } } }, { responsive: true, displaylogo: false })
+
+  await Plotly.react(errorPlot.value, [{ x: frames.reference_time, y: error, name: "Pitch difference", type: "scattergl", mode: "lines", line: { color: "#d9992e", width: 1.8 }, connectgaps: false }], { ...base, height: 220, shapes: [{ type: "rect", xref: "paper", x0: 0, x1: 1, y0: -25, y1: 25, fillcolor: "rgba(79,141,123,.16)", line: { width: 0 }, layer: "below" }], yaxis: { ...base.yaxis, range: [-200, 200], title: { text: "Cents" } } }, { responsive: true, displaylogo: false })
+  linkPlots()
+}
+
+function mappedPerformanceTime(referenceTime: number): number {
+  const frames = props.artifact.comparison.frames
+  let best = 0
+  for (let index = 1; index < frames.reference_time.length; index += 1) {
+    if (Math.abs(frames.reference_time[index] - referenceTime) < Math.abs(frames.reference_time[best] - referenceTime)) best = index
+  }
+  return frames.performance_time[best] ?? referenceTime
+}
+
+function stopAudio(): void {
+  for (const audio of [referenceAudio.value, mixAudio.value, takeAudio.value]) audio?.pause()
+  activePlayer.value = null
+  if (stopTimer !== undefined) window.clearTimeout(stopTimer)
+}
+
+async function play(kind: "reference" | "mix" | "take"): Promise<void> {
+  stopAudio()
+  const player = kind === "reference" ? referenceAudio.value : kind === "mix" ? mixAudio.value : takeAudio.value
+  if (!player) return
+  const start = kind === "take" ? mappedPerformanceTime(selectionStart.value) : selectionStart.value
+  const end = kind === "take" ? mappedPerformanceTime(selectionEnd.value) : selectionEnd.value
+  player.currentTime = start
+  activePlayer.value = kind
+  await player.play()
+  stopTimer = window.setTimeout(() => {
+    player.pause()
+    activePlayer.value = null
+    if (looping.value) void play(kind)
+  }, Math.max(.05, end - start) * 1000)
+}
+
+async function playAB(): Promise<void> {
+  looping.value = false
+  await play("reference")
+  stopTimer = window.setTimeout(() => void play("take"), Math.max(.05, selectionEnd.value - selectionStart.value) * 1000 + 160)
+}
+
+async function initialize(): Promise<void> {
+  waveforms.value = await apiJson<AlignedWaveforms>(`/api/projects/${props.project.id}/takes/${props.take.id}/waveforms`)
+  await nextTick()
+  await render()
+}
+
+watch([comparisonMode, showReference, showPerformance, showWaveforms, showPoints], () => void render())
+onMounted(() => void initialize())
+onBeforeUnmount(() => {
+  stopAudio()
+  unlinkPlots()
+  if (pitchPlot.value) plotly?.purge(pitchPlot.value)
+  if (confidencePlot.value) plotly?.purge(confidencePlot.value)
+  if (errorPlot.value) plotly?.purge(errorPlot.value)
+})
+</script>
+
+<template>
+  <section class="compare-view">
+    <div class="compare-heading">
+      <div><p class="mono-eyebrow accent-text">TAKE · {{ new Date(take.created_at).toLocaleDateString() }}</p><h2>{{ take.name }}</h2></div>
+      <div class="compare-switches">
+        <div class="segmented graphite-segmented"><button :class="{ active: metricScope === 'full' }" @click="metricScope = 'full'">FULL ANALYSIS</button><button :class="{ active: metricScope === 'selection' }" @click="metricScope = 'selection'">SELECTED RANGE</button></div>
+        <div class="segmented graphite-segmented"><button :class="{ active: comparisonMode === 'absolute' }" @click="comparisonMode = 'absolute'">ABSOLUTE</button><button :class="{ active: comparisonMode === 'relative' }" @click="comparisonMode = 'relative'">RELATIVE</button></div>
+      </div>
+    </div>
+
+    <div class="metric-strip">
+      <article><span>{{ comparisonMode === "absolute" ? "MEAN ERROR" : "RELATIVE MEAN" }}</span><strong class="accent-text">{{ metric(meanError, "¢") }}</strong><small>{{ metricScope === "selection" ? "selected interval" : "confident aligned frames" }}</small></article>
+      <article><span>{{ metricScope === "selection" ? "LOCAL BIAS" : "GLOBAL BIAS" }}</span><strong>{{ metric(summary?.global_bias_cents, "¢") }}</strong><small>median signed offset</small></article>
+      <article><span>WITHIN ±25¢</span><strong>{{ metric(within25, "%") }}</strong><small>good intonation</small></article>
+      <article><span>WITHIN ±50¢</span><strong>{{ metric(within50, "%") }}</strong><small>within half a semitone</small></article>
+      <article><span>STABLE-NOTE MAE</span><strong>{{ metric(stableError, "¢") }}</strong><small>{{ summary?.stable_note_region_count ?? 0 }} regions · {{ (summary?.stable_note_total_seconds ?? 0).toFixed(1) }}s</small></article>
+    </div>
+
+    <div class="alignment-strip"><span>ALIGNMENT</span><strong>Take {{ metric((artifact.alignment?.global_offset_seconds ?? 0) * 1000, " ms") }} relative to reference</strong><i></i><small>{{ ((artifact.alignment?.global_offset_confidence ?? 0) * 100).toFixed(1) }}% confidence · {{ artifact.alignment?.global_offset_method }}</small></div>
+
+    <section class="feature-panel charts-panel">
+      <div class="charts-heading"><div><p class="mono-eyebrow accent-text">ALIGNED CONTOURS</p><h2>Pitch movement</h2></div><div class="layer-pills"><button :class="{ active: showReference }" @click="showReference = !showReference">REFERENCE</button><button :class="{ active: showPerformance }" @click="showPerformance = !showPerformance">MINE</button><button :class="{ active: showWaveforms }" @click="showWaveforms = !showWaveforms">WAVEFORMS</button><button :class="{ active: showPoints }" @click="showPoints = !showPoints">POINTS</button></div></div>
+      <div class="chart-well"><div ref="pitchPlot"></div></div>
+      <div class="diagnostic-grid"><div class="chart-well"><p>PITCH CONFIDENCE · THRESHOLD {{ ((artifact.configuration?.pitch_confidence_threshold ?? .55) * 100).toFixed(0) }}%</p><div ref="confidencePlot"></div></div><div class="chart-well"><p>PITCH DIFFERENCE · BAND ±25¢</p><div ref="errorPlot"></div></div></div>
+    </section>
+
+    <section class="feature-panel listening-gate">
+      <div><p class="mono-eyebrow accent-text">LISTENING GATE</p><h2>Compare the same phrase</h2></div>
+      <div class="listening-range">FROM <input v-model.number="selectionStart" type="number" step=".1" /> / TO <input v-model.number="selectionEnd" type="number" step=".1" /> / LOOP {{ looping ? "ON" : "OFF" }}</div>
+      <div class="transport-row"><button :class="{ active: activePlayer === 'reference' }" @click="play('reference')">▶ REFERENCE VOCAL</button><button :class="{ active: activePlayer === 'mix' }" @click="play('mix')">▶ ORIGINAL MIX</button><button :class="{ active: activePlayer === 'take' }" @click="play('take')">▶ MY TAKE</button><button @click="playAB">A / B</button><button :class="{ active: looping }" @click="looping = !looping">LOOP</button><button @click="stopAudio">■ STOP</button></div>
+      <audio ref="referenceAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal`"></audio>
+      <audio ref="mixAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/mix`"></audio>
+      <audio ref="takeAudio" preload="metadata" :src="`/api/projects/${project.id}/takes/${take.id}/audio/vocal`"></audio>
+    </section>
+  </section>
+</template>

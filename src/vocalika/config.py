@@ -12,10 +12,14 @@ class AnalysisConfig:
     pitch_min_midi: float = 36.0
     pitch_max_midi: float = 84.0
     pitch_confidence_threshold: float = 0.55
+    pitch_harmonic_margin: float = 1.0
     octave_window_frames: int = 9
     max_pitch_gap_seconds: float = 0.08
     alignment_frames_per_second: float = 10.0
     alignment_band_radius: float = 0.2
+    alignment_temporal_consistency_weight: float = 0.1
+    alignment_maximum_offset_seconds: float = 5.0
+    alignment_offset_minimum_confidence: float = 0.9
     excellent_tolerance_cents: float = 15.0
     good_tolerance_cents: float = 25.0
     noticeable_tolerance_cents: float = 50.0

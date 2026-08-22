@@ -44,6 +44,13 @@ def analyze(
             help="Optional original mix retained for listening when reference is an isolated stem.",
         ),
     ] = None,
+    isolate_performance: Annotated[
+        bool,
+        typer.Option(
+            "--isolate-performance",
+            help="Separate the vocal from instruments in the performance before analysis.",
+        ),
+    ] = False,
     concert_pitch: Annotated[
         float,
         typer.Option(min=400.0, max=480.0, help="Concert A tuning in Hz."),
@@ -79,6 +86,7 @@ def analyze(
         output,
         reference_is_vocal=reference_is_vocal,
         reference_mix_path=reference_mix,
+        isolate_performance=isolate_performance,
         config=config,
         cache_directory=cache_directory,
         refresh_cache=refresh_cache,
@@ -99,23 +107,35 @@ def plot_command(
 
 @app.command()
 def serve(
-    analysis: Annotated[Path, typer.Argument(exists=True, dir_okay=False, readable=True)],
+    analysis: Annotated[
+        Path | None,
+        typer.Argument(exists=True, dir_okay=False, readable=True),
+    ] = None,
     host: Annotated[str, typer.Option()] = "127.0.0.1",
     port: Annotated[int, typer.Option(min=1, max=65535)] = 8000,
+    analyses_directory: Annotated[
+        Path,
+        typer.Option(file_okay=False, help="Root folder browsed for saved analyses."),
+    ] = Path("analysis-output"),
     cache_directory: Annotated[
         Path | None,
         typer.Option(file_okay=False, help="Cache used by analyses started in the web UI."),
     ] = None,
 ) -> None:
-    """Serve an analysis and the local practice UI."""
+    """Serve the analysis workspace, optionally opening an analysis."""
     repository_root = Path(__file__).resolve().parents[2]
     frontend_directory = repository_root / "frontend" / "dist"
+    analyses_directory = analyses_directory.expanduser().resolve()
     web_analysis_runner = partial(run_analysis, cache_directory=cache_directory)
     uvicorn.run(
         create_app(
             analysis,
             frontend_directory,
+            analyses_directory=analyses_directory / "web",
+            library_directory=analyses_directory,
             analysis_runner=web_analysis_runner,
+            projects_directory=analyses_directory / "projects",
+            cache_directory=cache_directory,
         ),
         host=host,
         port=port,

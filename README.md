@@ -1,17 +1,19 @@
 # Vocalika
 
-Vocalika is a local-first web application for comparing a singer's performance
-with a reference recording. It focuses on measurable pitch and timing
+Vocalika is a web application for comparing a singer's performance with a
+reference recording. It focuses on measurable pitch and timing
 differences rather than subjective scoring.
 
-The project is currently at the feasibility-spike stage described in the
-[product requirements](docs/PRD-001-MVP.md) and
-[technical architecture](docs/ARCHITECTURE.md).
+The audio-analysis core follows the original
+[product requirements](docs/PRD-001-MVP.md). The project/take workspace and its
+feature boundaries are documented in
+[feature architecture](docs/FEATURE_ARCHITECTURE.md).
 
 ## Status
 
-The first milestone proves the core path: continuous pitch extraction,
-temporal alignment, an aligned pitch overlay, a cents-error curve, and
+The application now combines continuous pitch extraction and temporal alignment
+with persistent reference projects, reusable vocal/instrumental stems, uploaded
+or browser-recorded takes, plain-text lyrics, aligned diagnostics, and
 synchronized playback.
 
 ## Development setup
@@ -46,7 +48,7 @@ uv run vocalika analyze \
   --output ./analysis-output
 
 uv run vocalika plot ./analysis-output/analysis.json
-uv run vocalika serve ./analysis-output/analysis.json
+uv run vocalika serve
 ```
 
 Or use a public YouTube reference directly:
@@ -55,6 +57,7 @@ Or use a public YouTube reference directly:
 uv run vocalika analyze \
   --reference "https://www.youtube.com/watch?v=..." \
   --performance ./ableton-take.flac \
+  --isolate-performance \
   --output ./analysis-output
 ```
 
@@ -69,7 +72,7 @@ uv run vocalika analyze \
   --output ./analysis-output
 
 uv run vocalika plot ./analysis-output/analysis.json
-uv run vocalika serve ./analysis-output/analysis.json
+uv run vocalika serve
 ```
 
 Then open <http://127.0.0.1:8000>. Original source files are never modified.
@@ -77,13 +80,45 @@ Working audio and large pitch arrays live beside the generated analysis JSON.
 `--output` accepts either an output directory or an explicit `.json` artifact
 path.
 
-The web interface can start another analysis from either a local reference file
-or a public YouTube URL plus a local performance file. Uploaded audio is saved
-under `samples/uploads/<analysis-id>/`; its artifact is written under
-`analysis-output/web/<analysis-id>/`. Both locations are intentionally ignored
-by Git.
+The web interface is project-centric. Create one project from a reference file
+or public YouTube URL; Vocalika stores the source and reusable stems below
+`analysis-output/projects/<project-id>/`. Each uploaded or microphone-recorded
+take belongs to that project and stores its own analysis. Project lyrics are
+plain text that can be pasted once and kept visible while recording. Browser
+recording uses the best Opus container supported by the browser and follows the
+same upload/analysis path as any other take.
+
+The older standalone CLI analysis and artifact-library endpoints remain
+available for scripts and compatibility. A positional artifact remains optional,
+so `vocalika serve ./analysis-output/example/analysis.json` still loads that
+artifact through the legacy API.
+
+If a performance contains instruments, enable **Isolate my vocal from
+instruments before analysis** in the web form or pass `--isolate-performance`
+to the CLI. Vocalika analyzes the separated vocal stem, retains the uploaded mix
+for listening, and caches the separation for subsequent runs.
+
+To make the server available on a trusted network, bind it to all interfaces:
+
+```bash
+uv run vocalika serve --host 0.0.0.0
+```
+
+This development server does not include authentication, so do not expose it to
+the public internet as-is.
 
 ## Pitch metrics
+
+Vocalika first estimates a global performance-versus-reference displacement.
+It compares direct audio cross-correlation, phonetic/spectral-change matching,
+and a smoothed vocal-energy-envelope fallback. Spectral changes help distinguish
+different lyrics sung to a repeated melody, while the energy envelope can still
+locate a short performance inside a longer reference when timbres differ.
+High-confidence offsets are applied before the pitch-DTW stage, preventing
+leading silence or omitted instrumental sections from causing unrelated phrases
+to be paired. The artifact records every candidate plus the chosen method,
+detected offset, correlation confidence, peak uniqueness, and whether the offset
+was applied.
 
 Vocalika reports two complementary error families:
 
@@ -99,14 +134,25 @@ Both are available in absolute mode and with global transposition compensated
 in relative mode. The graphs render a lightly median-smoothed display contour,
 bridge only unobserved gaps up to 120 ms, and leave longer unvoiced passages
 open. Stable-note pitch centers appear as thick bars inside the lightly green
-regions. Enable **Raw frame points** to inspect the unchanged measurements used
-by every metric.
+regions. The aligned-contour chart can also overlay normalized reference and
+performance amplitude envelopes; toggle **Waveforms**, **Reference**, or
+**Mine** to isolate the desired layers. The linked confidence chart shows each
+track's independent pYIN voicing probability, the configured acceptance
+threshold, and the mutually accepted comparison frames. Enable **Accepted frame
+points** to inspect the individual measurements used by the contours.
+
+Use **Metric scope → Selected range** to recalculate the cards for the current
+chart zoom or listening From/To range. Local absolute metrics use only confident
+paired frames inside that reference-time interval; local relative metrics also
+recenter on the interval's own median pitch bias.
 
 ## Models and cache
 
-pYIN pitch extraction does not require learned model parameters. Demucs uses a
-pretrained source-separation model; `vocalika setup-models` downloads its
-weights explicitly before the first analysis.
+pYIN pitch extraction does not require learned model parameters. Vocalika first
+uses harmonic/percussive separation to give pYIN a harmonic-only analysis signal;
+the listening audio is unchanged. Demucs uses a pretrained source-separation
+model; `vocalika setup-models` downloads its weights explicitly before the first
+analysis.
 
 YouTube audio, normalized working audio, Demucs stems, and compatible cleaned
 pitch tracks are cached locally. Cache keys include input content, processing
@@ -130,6 +176,11 @@ uv run pytest
 npm --prefix frontend run build
 npm --prefix frontend test
 ```
+
+The repository also has opt-in regression coverage backed by the Vocadito and
+MAST melody open datasets. See [Open test datasets](docs/OPEN_DATASETS.md) for
+the pinned downloads, test commands, licenses, and acknowledgements. Dataset
+files are downloaded locally and ignored by Git.
 
 ## License
 

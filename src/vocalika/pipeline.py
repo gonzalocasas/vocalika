@@ -13,6 +13,13 @@ import numpy as np
 from vocalika import __version__
 from vocalika.analysis.alignment import align_pitch_tracks
 from vocalika.analysis.comparison import compare_alignment
+from vocalika.analysis.offset import (
+    GlobalOffsetEstimate,
+    estimate_global_offset,
+    estimate_spectral_change_offset,
+    estimate_vocal_envelope_offset,
+    select_global_offset,
+)
 from vocalika.analysis.pitch import PitchTrack, PyinPitchExtractor
 from vocalika.analysis.pitch_cache import extract_clean_pitch
 from vocalika.analysis.stable_notes import analyze_stable_pitch_centers
@@ -71,6 +78,25 @@ def _acquire_reference(
     return LocalAudioSource(Path(value)).acquire()
 
 
+def _derived_vocal_asset(
+    source: AudioAsset,
+    separation: SeparationResult,
+    label: str,
+) -> AudioAsset:
+    separated = LocalAudioSource(separation.vocals).acquire()
+    return replace(
+        separated,
+        source_type="derived_vocal",
+        title=f"{source.title or label} — vocals",
+        source_url=source.source_url,
+        metadata={
+            **separated.metadata,
+            "derived_from": source.content_hash,
+            "separation": separation.to_dict(),
+        },
+    )
+
+
 def run_analysis(
     reference_path: str | Path,
     performance_path: Path,
@@ -78,6 +104,7 @@ def run_analysis(
     *,
     reference_is_vocal: bool = False,
     reference_mix_path: Path | None = None,
+    isolate_performance: bool = False,
     config: AnalysisConfig | None = None,
     cache_directory: Path | None = None,
     refresh_cache: bool = False,
@@ -102,24 +129,34 @@ def run_analysis(
         LocalAudioSource(reference_mix_path).acquire() if reference_mix_path else None
     )
 
-    separation: SeparationResult | None = None
+    reference_separation: SeparationResult | None = None
     analysis_reference_asset = reference_asset
     if not reference_is_vocal:
         progress("Isolating reference vocal")
-        separation = DemucsVocalSeparator(cache, refresh=refresh_cache).separate(reference_asset)
-        separated_asset = LocalAudioSource(separation.vocals).acquire()
-        analysis_reference_asset = replace(
-            separated_asset,
-            source_type="derived_vocal",
-            title=f"{reference_asset.title or 'Reference'} — vocals",
-            source_url=reference_asset.source_url,
-            metadata={
-                **separated_asset.metadata,
-                "derived_from": reference_asset.content_hash,
-                "separation": separation.to_dict(),
-            },
+        reference_separation = DemucsVocalSeparator(cache, refresh=refresh_cache).separate(
+            reference_asset
+        )
+        analysis_reference_asset = _derived_vocal_asset(
+            reference_asset,
+            reference_separation,
+            "Reference",
         )
         reference_mix_asset = reference_asset
+
+    performance_separation: SeparationResult | None = None
+    analysis_performance_asset = performance_asset
+    performance_mix_asset: AudioAsset | None = None
+    if isolate_performance:
+        progress("Isolating performance vocal")
+        performance_separation = DemucsVocalSeparator(cache, refresh=refresh_cache).separate(
+            performance_asset
+        )
+        analysis_performance_asset = _derived_vocal_asset(
+            performance_asset,
+            performance_separation,
+            "Performance",
+        )
+        performance_mix_asset = performance_asset
 
     progress("Normalizing reference audio")
     normalized_reference = normalize_for_analysis(
@@ -130,7 +167,7 @@ def run_analysis(
     )
     progress("Normalizing performance audio")
     normalized_performance = normalize_for_analysis(
-        performance_asset,
+        analysis_performance_asset,
         cache,
         config.analysis_sample_rate,
         refresh=refresh_cache,
@@ -142,6 +179,7 @@ def run_analysis(
         fmin_midi=config.pitch_min_midi,
         fmax_midi=config.pitch_max_midi,
         concert_pitch_hz=config.concert_pitch_hz,
+        harmonic_margin=config.pitch_harmonic_margin,
     )
     cleaning_parameters = {
         "confidence_threshold": config.pitch_confidence_threshold,
@@ -161,7 +199,7 @@ def run_analysis(
     progress("Extracting performance pitch")
     cached_performance_pitch = extract_clean_pitch(
         audio_path=normalized_performance.path,
-        content_hash=performance_asset.content_hash,
+        content_hash=analysis_performance_asset.content_hash,
         cache=cache,
         extractor=extractor,
         cleaning_parameters=cleaning_parameters,
@@ -171,12 +209,64 @@ def run_analysis(
     reference_pitch = cached_reference_pitch.track
     performance_pitch = cached_performance_pitch.track
 
+    progress("Estimating global time offset")
+    offset_estimates: list[GlobalOffsetEstimate] = []
+    offset_estimation_errors: list[str] = []
+    try:
+        offset_estimates.append(
+            estimate_global_offset(
+                normalized_reference.path,
+                normalized_performance.path,
+                maximum_offset_seconds=config.alignment_maximum_offset_seconds,
+            )
+        )
+    except (OSError, ValueError) as error:
+        offset_estimation_errors.append(f"PCM: {error}")
+    try:
+        offset_estimates.append(
+            estimate_spectral_change_offset(
+                normalized_reference.path,
+                normalized_performance.path,
+            )
+        )
+    except (OSError, ValueError) as error:
+        offset_estimation_errors.append(f"spectral changes: {error}")
+    try:
+        offset_estimates.append(
+            estimate_vocal_envelope_offset(
+                normalized_reference.path,
+                normalized_performance.path,
+            )
+        )
+    except (OSError, ValueError) as error:
+        offset_estimation_errors.append(f"vocal envelope: {error}")
+    # Estimators are ordered from most identity-specific to least. Direct PCM
+    # wins for identical audio; spectral changes can distinguish lyrics that
+    # share a melody; the energy envelope remains a useful final fallback.
+    offset_estimate = select_global_offset(
+        offset_estimates,
+        config.alignment_offset_minimum_confidence,
+    )
+    offset_estimation_error = "; ".join(offset_estimation_errors) or None
+    applied_offset_seconds = (
+        offset_estimate.seconds
+        if offset_estimate is not None
+        and offset_estimate.confidence >= config.alignment_offset_minimum_confidence
+        and abs(offset_estimate.seconds) >= 0.5 / config.alignment_frames_per_second
+        else None
+    )
     progress("Aligning pitch tracks")
     alignment = align_pitch_tracks(
         reference_pitch,
         performance_pitch,
         frames_per_second=config.alignment_frames_per_second,
         band_radius=config.alignment_band_radius,
+        global_offset_seconds=applied_offset_seconds,
+        temporal_consistency_weight=config.alignment_temporal_consistency_weight,
+        allow_subsequence=(
+            offset_estimate is not None
+            and offset_estimate.confidence >= config.alignment_offset_minimum_confidence
+        ),
     )
     progress("Calculating pitch differences")
     comparison = compare_alignment(
@@ -210,6 +300,18 @@ def run_analysis(
         "reference_midi": comparison.reference_midi.tolist(),
         "performance_midi": comparison.performance_midi.tolist(),
         "confidence": comparison.confidence.tolist(),
+        "reference_confidence": alignment.reference.confidence[
+            alignment.reference_indices
+        ].tolist(),
+        "performance_confidence": alignment.performance.confidence[
+            alignment.performance_indices
+        ].tolist(),
+        "reference_voiced": alignment.reference.voiced[
+            alignment.reference_indices
+        ].tolist(),
+        "performance_voiced": alignment.performance.voiced[
+            alignment.performance_indices
+        ].tolist(),
         "valid": comparison.valid.tolist(),
         "absolute_error_cents": comparison.absolute_error_cents.tolist(),
         "relative_error_cents": comparison.relative_error_cents.tolist(),
@@ -255,10 +357,11 @@ def run_analysis(
             },
             "is_isolated_vocal": reference_is_vocal,
             "original_mix": reference_mix_asset.to_dict() if reference_mix_asset else None,
-            "separation": separation.to_dict() if separation else None,
+            "separation": reference_separation.to_dict() if reference_separation else None,
         },
         "performance": {
             "source": performance_asset.to_dict(),
+            "analysis_source": analysis_performance_asset.to_dict(),
             "analysis_audio": str(normalized_performance.path),
             "normalization_cache_hit": normalized_performance.cache_hit,
             "conversion": {
@@ -268,6 +371,11 @@ def run_analysis(
                 "sample_format": "float32_pcm",
             },
             "is_isolated_vocal": True,
+            "isolation_applied": isolate_performance,
+            "original_mix": performance_mix_asset.to_dict() if performance_mix_asset else None,
+            "separation": (
+                performance_separation.to_dict() if performance_separation else None
+            ),
         },
         "pitch": {
             "extractor": reference_pitch.extractor,
@@ -276,14 +384,36 @@ def run_analysis(
             "fmin_midi": extractor.fmin_midi,
             "fmax_midi": extractor.fmax_midi,
             "concert_pitch_hz": extractor.concert_pitch_hz,
+            "harmonic_margin": extractor.harmonic_margin,
             "arrays": arrays_path.name,
             "reference_cache_hit": cached_reference_pitch.cache_hit,
             "performance_cache_hit": cached_performance_pitch.cache_hit,
         },
         "alignment": {
-            "method": "pitch-dtw",
+            "method": "audio-offset-plus-open-ended-temporally-regularized-pitch-dtw",
             "frames_per_second": alignment.frames_per_second,
             "point_count": int(comparison.reference_times.size),
+            "temporal_consistency_weight": (alignment.effective_temporal_consistency_weight),
+            "subsequence_alignment_applied": alignment.used_subsequence,
+            "global_offset_seconds": offset_estimate.seconds if offset_estimate else None,
+            "global_offset_confidence": offset_estimate.confidence if offset_estimate else None,
+            "global_offset_method": offset_estimate.method if offset_estimate else None,
+            "global_offset_raw_correlation": (
+                offset_estimate.raw_correlation if offset_estimate else None
+            ),
+            "global_offset_peak_margin": offset_estimate.peak_margin if offset_estimate else None,
+            "global_offset_candidates": [
+                {
+                    "method": estimate.method,
+                    "seconds": estimate.seconds,
+                    "confidence": estimate.confidence,
+                    "raw_correlation": estimate.raw_correlation,
+                    "peak_margin": estimate.peak_margin,
+                }
+                for estimate in offset_estimates
+            ],
+            "global_offset_applied": applied_offset_seconds is not None,
+            "global_offset_error": offset_estimation_error,
         },
         "comparison": {
             "summary": {

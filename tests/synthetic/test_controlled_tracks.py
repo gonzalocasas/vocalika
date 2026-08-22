@@ -50,6 +50,67 @@ def make_track(
     )
 
 
+def make_variable_duration_track(
+    notes: list[float],
+    durations: list[int],
+    *,
+    pitch_shift: float = 0.0,
+) -> PitchTrack:
+    midi = np.repeat(np.asarray(notes, dtype=np.float64), durations) + pitch_shift
+    times = np.arange(midi.size, dtype=np.float64) / 10.0
+    frequency = 440.0 * 2.0 ** ((midi - 69.0) / 12.0)
+    return PitchTrack(
+        times=times,
+        raw_frequency_hz=frequency,
+        raw_midi=midi.copy(),
+        midi=midi,
+        confidence=np.ones(midi.size, dtype=np.float64),
+        voiced=np.ones(midi.size, dtype=np.bool_),
+        extractor="synthetic",
+        sample_rate=100,
+        hop_length=10,
+    )
+
+
+def make_sparse_long_track(
+    duration: float,
+    *,
+    seed: int,
+    is_reference: bool,
+) -> PitchTrack:
+    random = np.random.default_rng(seed)
+    frame_rate = 10
+    frame_count = round(duration * frame_rate)
+    times = np.arange(frame_count, dtype=np.float64) / frame_rate
+    note_count = (frame_count + frame_rate - 1) // frame_rate
+    notes = np.repeat(
+        random.choice([57.0, 59.0, 60.0, 62.0, 64.0, 65.0, 67.0], note_count),
+        frame_rate,
+    )[:frame_count]
+    phrase_activity = (
+        (np.mod(times, 8.0) < 6.0) & ~((times >= 85.0) & (times < 100.0)) & (times < 185.0)
+    )
+    retention_probability = 0.16 if is_reference else 0.55
+    voiced = phrase_activity & (random.random(frame_count) < retention_probability)
+    if is_reference:
+        voiced |= (times >= 195.0) & (times < 203.0) & (random.random(frame_count) < 0.2)
+    midi = np.full(frame_count, np.nan)
+    midi[voiced] = notes[voiced]
+    frequency = np.full(frame_count, np.nan)
+    frequency[voiced] = 440.0 * 2.0 ** ((midi[voiced] - 69.0) / 12.0)
+    return PitchTrack(
+        times=times,
+        raw_frequency_hz=frequency,
+        raw_midi=midi.copy(),
+        midi=midi,
+        confidence=voiced.astype(np.float64),
+        voiced=voiced,
+        extractor="synthetic",
+        sample_rate=100,
+        hop_length=10,
+    )
+
+
 @pytest.mark.parametrize("pitch_shift", [0.5, -0.25])
 def test_recovers_global_pitch_shift(pitch_shift: float) -> None:
     reference = make_track()
@@ -61,6 +122,52 @@ def test_recovers_global_pitch_shift(pitch_shift: float) -> None:
     assert np.max(np.abs(comparison.relative_error_cents[comparison.valid])) < 0.01
     assert comparison.relative_mean_absolute_error_cents < 0.01
     assert comparison.relative_within_15_percent == 100.0
+
+
+def test_melodic_movement_prevents_neighboring_notes_from_being_paired() -> None:
+    notes = [57.0, 58.0, 61.0, 62.0, 63.0, 60.0, 61.0, 59.0, 57.0]
+    reference = make_variable_duration_track(
+        notes,
+        [11, 11, 10, 7, 15, 4, 7, 4, 7],
+    )
+    performance = make_variable_duration_track(
+        notes,
+        [15, 7, 14, 9, 12, 8, 6, 12, 15],
+        pitch_shift=12.0,
+    )
+
+    comparison = compare_alignment(align_pitch_tracks(reference, performance))
+
+    assert comparison.relative_mean_absolute_error_cents < 5.0
+    assert comparison.relative_within_50_percent > 95.0
+
+
+def test_sparse_long_tracks_do_not_accumulate_warp_before_an_unmatched_tail() -> None:
+    reference = make_sparse_long_track(234.0, seed=0, is_reference=True)
+    performance = make_sparse_long_track(197.0, seed=1, is_reference=False)
+
+    alignment = align_pitch_tracks(reference, performance)
+    reference_times = alignment.reference.times[alignment.reference_indices]
+    performance_times = alignment.performance.times[alignment.performance_indices]
+
+    for anchor in (30.0, 60.0, 80.0, 100.0, 120.0, 150.0, 180.0):
+        nearby = np.abs(reference_times - anchor) <= 0.5
+        assert np.median(performance_times[nearby]) == pytest.approx(anchor, abs=2.0)
+
+
+def test_partial_performance_does_not_stretch_across_reference_tail() -> None:
+    notes = [60.0, 62.0, 65.0, 61.0, 67.0, 64.0, 69.0, 63.0, 58.0, 66.0]
+    reference = make_variable_duration_track(notes, [10] * len(notes))
+    performance = make_variable_duration_track(notes[:5], [10] * 5)
+
+    alignment = align_pitch_tracks(reference, performance, allow_subsequence=True)
+    aligned_reference_times = alignment.reference.times[alignment.reference_indices]
+    aligned_performance_times = alignment.performance.times[alignment.performance_indices]
+
+    assert aligned_performance_times[-1] == pytest.approx(4.9, abs=0.2)
+    assert aligned_reference_times[-1] == pytest.approx(4.0, abs=0.3)
+    assert aligned_reference_times[-1] < reference.duration_seconds - 4.0
+    assert alignment.used_subsequence is True
 
 
 def test_alignment_recovers_start_delay() -> None:

@@ -46,6 +46,9 @@ packages = ["src/vocalika"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+markers = [
+  "open_data: tests backed by optional, locally fetched open datasets",
+]
 
 [tool.ruff]
 target-version = "py312"
@@ -60,5 +63,5 @@ strict = true
 packages = ["vocalika"]
 
 [[tool.mypy.overrides]]
-module = ["plotly", "plotly.*", "soundfile"]
+module = ["plotly", "plotly.*", "scipy", "scipy.*", "soundfile"]
 ignore_missing_imports = true
