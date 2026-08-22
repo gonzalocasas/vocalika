@@ -75,9 +75,18 @@ async function selectTake(take: Take): Promise<void> {
 
 async function chooseTab(tab: ProjectTab): Promise<void> {
   activeTab.value = tab
-  if (tab === "compare" && selectedProject.value && selectedTake.value && !artifact.value) {
+  if (tab === "compare" && selectedProject.value && selectedTake.value?.status === "analyzed" && !artifact.value) {
     artifact.value = await loadAnalysis(selectedProject.value.id, selectedTake.value.id)
   }
+}
+
+function openExport(): void {
+  activeTab.value = "export"
+}
+
+function selectExportTake(takeId: string): void {
+  selectedTakeId.value = takeId
+  artifact.value = null
 }
 </script>
 
@@ -119,7 +128,7 @@ async function chooseTab(tab: ProjectTab): Promise<void> {
           <nav class="project-tabs">
             <button :class="{ active: activeTab === 'reference' }" @click="chooseTab('reference')"><span>01</span> REFERENCE</button>
             <button :class="{ active: activeTab === 'takes' }" @click="chooseTab('takes')"><span>02</span> TAKES</button>
-            <button :disabled="!selectedTake" :class="{ active: activeTab === 'compare' }" @click="chooseTab('compare')"><span>03</span> COMPARE</button>
+            <button :disabled="selectedTake?.status !== 'analyzed'" :class="{ active: activeTab === 'compare' }" @click="chooseTab('compare')"><span>03</span> COMPARE</button>
             <button :class="{ active: activeTab === 'export' }" @click="chooseTab('export')"><span>04</span> EXPORT</button>
           </nav>
         </section>
@@ -140,8 +149,14 @@ async function chooseTab(tab: ProjectTab): Promise<void> {
           :project="selectedProject"
           :take="selectedTake"
           :artifact="artifact"
+          @export="openExport"
         />
-        <ExportView v-else-if="activeTab === 'export'" :project="selectedProject" :take="selectedTake" />
+        <ExportView
+          v-else-if="activeTab === 'export'"
+          :project="selectedProject"
+          :selected-take-id="selectedTakeId"
+          @select="selectExportTake"
+        />
         <section v-else class="empty-copy">Choose an analyzed take to compare.</section>
       </template>
     </main>

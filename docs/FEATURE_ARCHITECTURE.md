@@ -13,12 +13,14 @@ Vue app shell
   ├─ reference feature ──────┤
   ├─ takes feature ──────────┼─ shared API client + domain types
   ├─ recording feature ──────┤
-  └─ compare feature ────────┘
+  ├─ compare feature ────────┤
+  └─ export feature ─────────┘
 
 FastAPI routers
   └─ project service
        ├─ project repository
        ├─ reference preparation
+       ├─ export mixdown
        └─ existing analysis pipeline
             └─ audio / pitch / alignment primitives
 ```
@@ -37,6 +39,9 @@ analysis is calculated.
 - `vocalika.projects.service`: project preparation and take lifecycle. It is
   the only project feature allowed to invoke source acquisition, separation,
   or `run_analysis`.
+- `vocalika.projects.export`: aligned take placement and instrumental mixdown.
+  It consumes persisted project records and analysis timestamps without
+  coupling the analysis pipeline to delivery formats.
 - `vocalika.api.projects`: HTTP translation only. It validates multipart input,
   delegates work, and serves project-owned media/artifacts.
 - `vocalika.api.uploads`: shared upload filename and size policy.
@@ -54,6 +59,8 @@ still be reused from Vocalika's cache.
 - `features/recording`: microphone permission, `MediaRecorder`, and recording
   controls. Its output is a `File`, identical to a dropped upload.
 - `features/compare`: metric cards, Plotly diagnostics, and listening gate.
+- `features/export`: take selection, preview controls, and downloadable
+  mixdown requests.
 - `shared`: API client, persisted DTOs, and presentation-neutral utilities.
 
 `App.vue` is an app-shell/router state machine only. It owns the selected
@@ -61,10 +68,9 @@ project and active tab, while each feature owns its local interaction state.
 
 ## Extension seams
 
-- Export consumes `ProjectReference.instrumental_path` and an analyzed take;
-  it does not need changes to recording or comparison.
+- Additional export encoders can consume the rendered mix without changes to
+  recording, comparison, or analysis.
 - Transposition is a project setting and can be implemented as an alternate
   prepared-reference revision. Takes retain the revision used for analysis.
 - Authentication or remote object storage can replace the repository/API
   adapters without changing the audio pipeline or Vue feature components.
-

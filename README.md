@@ -14,7 +14,7 @@ feature boundaries are documented in
 The application now combines continuous pitch extraction and temporal alignment
 with persistent reference projects, reusable vocal/instrumental stems, uploaded
 or browser-recorded takes, plain-text lyrics, aligned diagnostics, and
-synchronized playback.
+synchronized playback and mix export.
 
 ## Development setup
 
@@ -88,6 +88,10 @@ plain text that can be pasted once and kept visible while recording. Browser
 recording uses the best Opus container supported by the browser and follows the
 same upload/analysis path as any other take.
 
+The Export tab places the selected take on the reference timeline using the
+analysis correspondence, mixes it with the isolated instrumental at an
+adjustable level, and provides a short preview or MP3/WAV/FLAC download.
+
 The older standalone CLI analysis and artifact-library endpoints remain
 available for scripts and compatibility. A positional artifact remains optional,
 so `vocalika serve ./analysis-output/example/analysis.json` still loads that
@@ -134,12 +138,15 @@ Both are available in absolute mode and with global transposition compensated
 in relative mode. The graphs render a lightly median-smoothed display contour,
 bridge only unobserved gaps up to 120 ms, and leave longer unvoiced passages
 open. Stable-note pitch centers appear as thick bars inside the lightly green
-regions. The aligned-contour chart can also overlay normalized reference and
-performance amplitude envelopes; toggle **Waveforms**, **Reference**, or
-**Mine** to isolate the desired layers. The linked confidence chart shows each
+regions. The aligned-contour chart can also overlay simplified vertical-line
+envelopes from the isolated reference and performance vocals; toggle **Vocal
+waveforms**, **Reference**, or **Mine** to isolate the desired layers. The linked
+confidence chart shows each
 track's independent pYIN voicing probability, the configured acceptance
 threshold, and the mutually accepted comparison frames. Enable **Accepted frame
 points** to inspect the individual measurements used by the contours.
+During listening, a shared playhead crosses the pitch, confidence, and error
+charts and remains synchronized when the charts are zoomed.
 
 Use **Metric scope → Selected range** to recalculate the cards for the current
 chart zoom or listening From/To range. Local absolute metrics use only confident

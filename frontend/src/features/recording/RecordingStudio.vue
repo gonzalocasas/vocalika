@@ -65,6 +65,9 @@ watch(recorder.recordedFile, (file) => {
   if (recordedUrl.value) window.URL.revokeObjectURL(recordedUrl.value)
   recordedUrl.value = file ? window.URL.createObjectURL(file) : ""
 })
+watch(voiceLevel, (value) => {
+  if (vocalAudio.value) vocalAudio.value.volume = value / 100
+})
 onBeforeUnmount(() => {
   stopMonitor()
   if (recordedUrl.value) window.URL.revokeObjectURL(recordedUrl.value)
@@ -91,7 +94,7 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
     <label class="monitor-slider">
       <span>REFERENCE VOICE <b>{{ voiceLevel }}%</b></span>
       <input v-model.number="voiceLevel" type="range" min="0" max="100" />
-      <small>0% is karaoke · instrumental remains at full level</small>
+      <small>Adjust live while recording · 0% is karaoke · instrumental remains at full level</small>
     </label>
 
     <div class="record-readout" :class="{ live: recorder.state.value === 'recording' }">

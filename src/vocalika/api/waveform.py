@@ -57,8 +57,16 @@ def build_aligned_waveforms(
 
     reference = artifact["reference"]
     performance = artifact["performance"]
-    reference_path = Path(reference.get("analysis_audio") or reference["source"]["path"])
-    performance_path = Path(performance.get("analysis_audio") or performance["source"]["path"])
+    reference_path = Path(
+        reference.get("analysis_audio")
+        or reference.get("analysis_source", {}).get("path")
+        or reference["source"]["path"]
+    )
+    performance_path = Path(
+        performance.get("analysis_audio")
+        or performance.get("analysis_source", {}).get("path")
+        or performance["source"]["path"]
+    )
     return {
         "time": reference_times.tolist(),
         "reference_amplitude": _normalized_rms_envelope(
@@ -79,7 +87,10 @@ def build_waveform_envelope(
     maximum_points: int = 320,
 ) -> dict[str, list[float]]:
     if duration_seconds <= 0:
-        raise ValueError("Audio duration must be positive")
+        samples, sample_rate = _load_waveform_audio(path)
+        duration_seconds = samples.size / sample_rate
+    if duration_seconds <= 0:
+        raise ValueError("Audio is empty")
     times = np.linspace(0.0, duration_seconds, maximum_points, dtype=np.float64)
     return {
         "time": times.tolist(),

@@ -8,6 +8,7 @@ import { apiJson } from "../../shared/api"
 import type { AlignedWaveforms, AnalysisArtifact, Project, Take } from "../../shared/types"
 
 const props = defineProps<{ project: Project; take: Take; artifact: AnalysisArtifact }>()
+const emit = defineEmits<{ export: [] }>()
 
 const pitchPlot = ref<HTMLDivElement | null>(null)
 const confidencePlot = ref<HTMLDivElement | null>(null)
@@ -24,6 +25,7 @@ const selectionStart = ref(times[0] ?? 0)
 const selectionEnd = ref(Math.min(times.at(-1) ?? 30, 30))
 const looping = ref(false)
 const activePlayer = ref<"reference" | "mix" | "take" | null>(null)
+const playbackPosition = ref(selectionStart.value)
 const referenceAudio = ref<HTMLAudioElement | null>(null)
 const mixAudio = ref<HTMLAudioElement | null>(null)
 const takeAudio = ref<HTMLAudioElement | null>(null)
@@ -31,6 +33,9 @@ let plotly: typeof import("plotly.js-dist-min")["default"] | null = null
 let linked = false
 let mirroring = false
 let stopTimer: number | undefined
+let sequenceTimer: number | undefined
+let playbackFrame: number | undefined
+let lastCursorUpdate = 0
 
 async function loadPlotly(): Promise<typeof import("plotly.js-dist-min")["default"]> {
   if (!plotly) plotly = (await import("plotly.js-dist-min")).default
@@ -77,8 +82,29 @@ function shifted(values: Array<number | null>, amount: number): Array<number | n
   return values.map((value) => value === null ? null : value - amount)
 }
 
-function waveformPolygon(time: number[], amplitude: number[]): { x: number[]; y: number[] } {
-  return { x: [...time, ...[...time].reverse()], y: [...amplitude, ...[...amplitude].reverse().map((value) => -value)] }
+function waveformBars(time: number[], amplitude: number[]): { x: Array<number | null>; y: Array<number | null> } {
+  const stride = Math.max(1, Math.ceil(time.length / 240))
+  const x: Array<number | null> = []
+  const y: Array<number | null> = []
+  for (let index = 0; index < time.length; index += stride) {
+    const value = amplitude[index] ?? 0
+    x.push(time[index], time[index], null)
+    y.push(-value, value, null)
+  }
+  return { x, y }
+}
+
+function cursorShape(position: number): Record<string, unknown> {
+  return {
+    type: "line",
+    x0: position,
+    x1: position,
+    yref: "paper",
+    y0: 0,
+    y1: 1,
+    line: { color: "#f0e9dc", width: 2 },
+    layer: "above",
+  }
 }
 
 function plotElements(): PlotlyHTMLElement[] {
@@ -139,25 +165,25 @@ async function render(): Promise<void> {
     xaxis: { gridcolor: "#262b2c", title: { text: "Reference time (seconds)" } },
     yaxis: { gridcolor: "#262b2c" },
   }
-  const referenceWave = waveforms.value ? waveformPolygon(waveforms.value.time, waveforms.value.reference_amplitude) : null
-  const performanceWave = waveforms.value ? waveformPolygon(waveforms.value.time, waveforms.value.performance_amplitude) : null
+  const referenceWave = waveforms.value ? waveformBars(waveforms.value.time, waveforms.value.reference_amplitude) : null
+  const performanceWave = waveforms.value ? waveformBars(waveforms.value.time, waveforms.value.performance_amplitude) : null
   await Plotly.react(pitchPlot.value, [
-    ...(showWaveforms.value && referenceWave ? [{ ...referenceWave, type: "scatter" as const, mode: "lines" as const, fill: "toself" as const, yaxis: "y2", line: { width: 0 }, fillcolor: "rgba(232,226,214,.08)", hoverinfo: "skip" as const, showlegend: false }] : []),
-    ...(showWaveforms.value && performanceWave ? [{ ...performanceWave, type: "scatter" as const, mode: "lines" as const, fill: "toself" as const, yaxis: "y2", line: { width: 0 }, fillcolor: "rgba(217,153,46,.08)", hoverinfo: "skip" as const, showlegend: false }] : []),
+    ...(showWaveforms.value && referenceWave ? [{ ...referenceWave, type: "scattergl" as const, mode: "lines" as const, yaxis: "y2", line: { width: 3, color: "rgba(232,226,214,.18)" }, hoverinfo: "skip" as const, showlegend: false }] : []),
+    ...(showWaveforms.value && performanceWave ? [{ ...performanceWave, type: "scattergl" as const, mode: "lines" as const, yaxis: "y2", line: { width: 3, color: "rgba(217,153,46,.20)" }, hoverinfo: "skip" as const, showlegend: false }] : []),
     { x: frames.reference_time, y: referencePitch, name: "Reference", visible: showReference.value, type: "scattergl", mode: "lines", line: { color: "#e8e2d6", width: 2.2 }, connectgaps: false },
     { x: frames.reference_time, y: performancePitch, name: "Mine", visible: showPerformance.value, type: "scattergl", mode: "lines", line: { color: "#d9992e", width: 2.2 }, connectgaps: false },
     ...(showPoints.value ? [
       { x: frames.reference_time, y: rawContour(frames.reference_midi, referenceAccepted), name: "Reference points", type: "scattergl" as const, mode: "markers" as const, marker: { color: "#e8e2d6", size: 3, opacity: .35 } },
       { x: frames.reference_time, y: shifted(rawContour(frames.performance_midi, performanceAccepted), bias), name: "Mine points", type: "scattergl" as const, mode: "markers" as const, marker: { color: "#d9992e", size: 3, opacity: .35 } },
     ] : []),
-  ], { ...base, height: 320, yaxis: { ...base.yaxis, title: { text: "Continuous MIDI" } }, yaxis2: { overlaying: "y", range: [-1.05, 1.05], visible: false, fixedrange: true } }, { responsive: true, displaylogo: false })
+  ], { ...base, height: 320, shapes: [cursorShape(playbackPosition.value)], yaxis: { ...base.yaxis, title: { text: "Continuous MIDI" } }, yaxis2: { overlaying: "y", range: [-1.05, 1.05], visible: false, fixedrange: true } }, { responsive: true, displaylogo: false })
 
   await Plotly.react(confidencePlot.value, [
     { x: frames.reference_time, y: refConfidence.map((value) => 100 * value), name: "Reference", type: "scattergl", mode: "lines", line: { color: "#4f8d7b", width: 1.6 } },
     { x: frames.reference_time, y: perfConfidence.map((value) => 100 * value), name: "Mine", type: "scattergl", mode: "lines", line: { color: "#c96f3e", width: 1.6 } },
-  ], { ...base, height: 220, shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: threshold, y1: threshold, line: { color: "#3a4040", dash: "dash", width: 1 } }], yaxis: { ...base.yaxis, range: [0, 100], title: { text: "Confidence %" } } }, { responsive: true, displaylogo: false })
+  ], { ...base, height: 220, shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: threshold, y1: threshold, line: { color: "#3a4040", dash: "dash", width: 1 } }, cursorShape(playbackPosition.value)], yaxis: { ...base.yaxis, range: [0, 100], title: { text: "Confidence %" } } }, { responsive: true, displaylogo: false })
 
-  await Plotly.react(errorPlot.value, [{ x: frames.reference_time, y: error, name: "Pitch difference", type: "scattergl", mode: "lines", line: { color: "#d9992e", width: 1.8 }, connectgaps: false }], { ...base, height: 220, shapes: [{ type: "rect", xref: "paper", x0: 0, x1: 1, y0: -25, y1: 25, fillcolor: "rgba(79,141,123,.16)", line: { width: 0 }, layer: "below" }], yaxis: { ...base.yaxis, range: [-200, 200], title: { text: "Cents" } } }, { responsive: true, displaylogo: false })
+  await Plotly.react(errorPlot.value, [{ x: frames.reference_time, y: error, name: "Pitch difference", type: "scattergl", mode: "lines", line: { color: "#d9992e", width: 1.8 }, connectgaps: false }], { ...base, height: 220, shapes: [{ type: "rect", xref: "paper", x0: 0, x1: 1, y0: -25, y1: 25, fillcolor: "rgba(79,141,123,.16)", line: { width: 0 }, layer: "below" }, cursorShape(playbackPosition.value)], yaxis: { ...base.yaxis, range: [-200, 200], title: { text: "Cents" } } }, { responsive: true, displaylogo: false })
   linkPlots()
 }
 
@@ -170,10 +196,50 @@ function mappedPerformanceTime(referenceTime: number): number {
   return frames.performance_time[best] ?? referenceTime
 }
 
+function mappedReferenceTime(performanceTime: number): number {
+  const frames = props.artifact.comparison.frames
+  let best = 0
+  for (let index = 1; index < frames.performance_time.length; index += 1) {
+    if (Math.abs(frames.performance_time[index] - performanceTime) < Math.abs(frames.performance_time[best] - performanceTime)) best = index
+  }
+  return frames.reference_time[best] ?? performanceTime
+}
+
+async function drawPlaybackCursor(position: number): Promise<void> {
+  playbackPosition.value = position
+  const Plotly = await loadPlotly()
+  const updates = [
+    [pitchPlot.value, 0],
+    [confidencePlot.value, 1],
+    [errorPlot.value, 1],
+  ] as const
+  await Promise.all(updates.flatMap(([plot, shapeIndex]) => plot ? [Plotly.relayout(plot, {
+    [`shapes[${shapeIndex}].x0`]: position,
+    [`shapes[${shapeIndex}].x1`]: position,
+  })] : []))
+}
+
+function animatePlayback(timestamp: number): void {
+  const kind = activePlayer.value
+  if (!kind) return
+  const player = kind === "reference" ? referenceAudio.value : kind === "mix" ? mixAudio.value : takeAudio.value
+  if (player && timestamp - lastCursorUpdate >= 40) {
+    lastCursorUpdate = timestamp
+    const position = kind === "take" ? mappedReferenceTime(player.currentTime) : player.currentTime
+    void drawPlaybackCursor(position)
+  }
+  playbackFrame = window.requestAnimationFrame(animatePlayback)
+}
+
 function stopAudio(): void {
   for (const audio of [referenceAudio.value, mixAudio.value, takeAudio.value]) audio?.pause()
   activePlayer.value = null
   if (stopTimer !== undefined) window.clearTimeout(stopTimer)
+  stopTimer = undefined
+  if (sequenceTimer !== undefined) window.clearTimeout(sequenceTimer)
+  sequenceTimer = undefined
+  if (playbackFrame !== undefined) window.cancelAnimationFrame(playbackFrame)
+  playbackFrame = undefined
 }
 
 async function play(kind: "reference" | "mix" | "take"): Promise<void> {
@@ -183,11 +249,16 @@ async function play(kind: "reference" | "mix" | "take"): Promise<void> {
   const start = kind === "take" ? mappedPerformanceTime(selectionStart.value) : selectionStart.value
   const end = kind === "take" ? mappedPerformanceTime(selectionEnd.value) : selectionEnd.value
   player.currentTime = start
+  await drawPlaybackCursor(selectionStart.value)
   activePlayer.value = kind
   await player.play()
+  playbackFrame = window.requestAnimationFrame(animatePlayback)
   stopTimer = window.setTimeout(() => {
     player.pause()
     activePlayer.value = null
+    if (playbackFrame !== undefined) window.cancelAnimationFrame(playbackFrame)
+    playbackFrame = undefined
+    void drawPlaybackCursor(selectionEnd.value)
     if (looping.value) void play(kind)
   }, Math.max(.05, end - start) * 1000)
 }
@@ -195,7 +266,7 @@ async function play(kind: "reference" | "mix" | "take"): Promise<void> {
 async function playAB(): Promise<void> {
   looping.value = false
   await play("reference")
-  stopTimer = window.setTimeout(() => void play("take"), Math.max(.05, selectionEnd.value - selectionStart.value) * 1000 + 160)
+  sequenceTimer = window.setTimeout(() => void play("take"), Math.max(.05, selectionEnd.value - selectionStart.value) * 1000 + 160)
 }
 
 async function initialize(): Promise<void> {
@@ -222,6 +293,7 @@ onBeforeUnmount(() => {
       <div class="compare-switches">
         <div class="segmented graphite-segmented"><button :class="{ active: metricScope === 'full' }" @click="metricScope = 'full'">FULL ANALYSIS</button><button :class="{ active: metricScope === 'selection' }" @click="metricScope = 'selection'">SELECTED RANGE</button></div>
         <div class="segmented graphite-segmented"><button :class="{ active: comparisonMode === 'absolute' }" @click="comparisonMode = 'absolute'">ABSOLUTE</button><button :class="{ active: comparisonMode === 'relative' }" @click="comparisonMode = 'relative'">RELATIVE</button></div>
+        <button class="export-take-button" @click="emit('export')">EXPORT THIS TAKE →</button>
       </div>
     </div>
 
@@ -236,7 +308,7 @@ onBeforeUnmount(() => {
     <div class="alignment-strip"><span>ALIGNMENT</span><strong>Take {{ metric((artifact.alignment?.global_offset_seconds ?? 0) * 1000, " ms") }} relative to reference</strong><i></i><small>{{ ((artifact.alignment?.global_offset_confidence ?? 0) * 100).toFixed(1) }}% confidence · {{ artifact.alignment?.global_offset_method }}</small></div>
 
     <section class="feature-panel charts-panel">
-      <div class="charts-heading"><div><p class="mono-eyebrow accent-text">ALIGNED CONTOURS</p><h2>Pitch movement</h2></div><div class="layer-pills"><button :class="{ active: showReference }" @click="showReference = !showReference">REFERENCE</button><button :class="{ active: showPerformance }" @click="showPerformance = !showPerformance">MINE</button><button :class="{ active: showWaveforms }" @click="showWaveforms = !showWaveforms">WAVEFORMS</button><button :class="{ active: showPoints }" @click="showPoints = !showPoints">POINTS</button></div></div>
+      <div class="charts-heading"><div><p class="mono-eyebrow accent-text">ALIGNED CONTOURS</p><h2>Pitch movement</h2></div><div class="layer-pills"><button :class="{ active: showReference }" @click="showReference = !showReference">REFERENCE</button><button :class="{ active: showPerformance }" @click="showPerformance = !showPerformance">MINE</button><button :class="{ active: showWaveforms }" @click="showWaveforms = !showWaveforms">VOCAL WAVEFORMS</button><button :class="{ active: showPoints }" @click="showPoints = !showPoints">POINTS</button></div></div>
       <div class="chart-well"><div ref="pitchPlot"></div></div>
       <div class="diagnostic-grid"><div class="chart-well"><p>PITCH CONFIDENCE · THRESHOLD {{ ((artifact.configuration?.pitch_confidence_threshold ?? .55) * 100).toFixed(0) }}%</p><div ref="confidencePlot"></div></div><div class="chart-well"><p>PITCH DIFFERENCE · BAND ±25¢</p><div ref="errorPlot"></div></div></div>
     </section>

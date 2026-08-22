@@ -12,6 +12,7 @@ from vocalika.api.uploads import safe_upload_name, save_upload
 from vocalika.api.waveform import build_aligned_waveforms, build_waveform_envelope
 from vocalika.audio.sources import LocalAudioSource
 from vocalika.models.artifact import load_artifact
+from vocalika.projects.export import ExportFormat, ProjectExportService
 from vocalika.projects.models import Project, Take
 from vocalika.projects.repository import ProjectNotFoundError
 from vocalika.projects.service import ProjectService
@@ -22,6 +23,12 @@ class ProjectSettingsUpdate(BaseModel):
     trim_end_seconds: float | None = None
     transpose_semitones: int | None = None
     lyrics: str | None = None
+
+
+class ExportRequest(BaseModel):
+    take_id: str
+    instrumental_db: float = -4.0
+    output_format: ExportFormat = "mp3"
 
 
 def _project_payload(project: Project) -> dict[str, Any]:
@@ -48,6 +55,7 @@ def _artifact_for_take(service: ProjectService, project_id: str, take_id: str) -
 
 def create_projects_router(service: ProjectService) -> APIRouter:
     router = APIRouter(prefix="/api/projects", tags=["projects"])
+    export_service = ProjectExportService(service.repository)
 
     @router.get("")
     def list_projects() -> dict[str, list[dict[str, Any]]]:
@@ -119,10 +127,7 @@ def create_projects_router(service: ProjectService) -> APIRouter:
         safe_name = safe_upload_name(audio_file.filename, "take")
         suffix = Path(safe_name).suffix
         source_path = (
-            service.repository.project_directory(project_id)
-            / "takes"
-            / take_id
-            / f"source{suffix}"
+            service.repository.project_directory(project_id) / "takes" / take_id / f"source{suffix}"
         )
         await save_upload(audio_file, source_path)
         try:
@@ -255,5 +260,38 @@ def create_projects_router(service: ProjectService) -> APIRouter:
             asset.duration_seconds,
             maximum_points=100,
         )
+
+    async def create_export(
+        project_id: str,
+        request: ExportRequest,
+        *,
+        preview: bool,
+    ) -> FileResponse:
+        try:
+            result = await run_in_threadpool(
+                export_service.render,
+                project_id,
+                request.take_id,
+                instrumental_db=request.instrumental_db,
+                output_format=request.output_format,
+                preview=preview,
+            )
+        except (ProjectNotFoundError, LookupError) as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except (OSError, RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return FileResponse(
+            result.path,
+            media_type=result.media_type,
+            filename=result.filename,
+        )
+
+    @router.post("/{project_id}/exports/preview", response_class=FileResponse)
+    async def preview_export(project_id: str, request: ExportRequest) -> FileResponse:
+        return await create_export(project_id, request, preview=True)
+
+    @router.post("/{project_id}/exports", response_class=FileResponse)
+    async def render_export(project_id: str, request: ExportRequest) -> FileResponse:
+        return await create_export(project_id, request, preview=False)
 
     return router
