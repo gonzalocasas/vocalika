@@ -128,6 +128,8 @@ It compares direct audio cross-correlation, phonetic/spectral-change matching,
 and a smoothed vocal-energy-envelope fallback. Spectral changes help distinguish
 different lyrics sung to a repeated melody, while the energy envelope can still
 locate a short performance inside a longer reference when timbres differ.
+When both methods identify the same nearby phrase, spectral matching chooses the
+phrase and the vocal envelope refines its audible onset timing.
 High-confidence offsets are applied before the pitch-DTW stage, preventing
 leading silence or omitted instrumental sections from causing unrelated phrases
 to be paired. The artifact records every candidate plus the chosen method,

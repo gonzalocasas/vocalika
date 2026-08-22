@@ -37,6 +37,36 @@ def select_global_offset(
     )
 
 
+def refine_global_offset(
+    selected: GlobalOffsetEstimate | None,
+    estimates: list[GlobalOffsetEstimate],
+    *,
+    maximum_refinement_seconds: float = 0.35,
+    minimum_envelope_confidence: float = 0.4,
+) -> GlobalOffsetEstimate | None:
+    """Use vocal-energy timing to refine a nearby identity-specific phrase match."""
+    if selected is None or selected.method != "spectral-change-correlation":
+        return selected
+    envelope = next(
+        (
+            estimate
+            for estimate in estimates
+            if estimate.method == "smoothed-vocal-envelope-correlation"
+            and estimate.confidence >= minimum_envelope_confidence
+        ),
+        None,
+    )
+    if envelope is None or abs(envelope.seconds - selected.seconds) > maximum_refinement_seconds:
+        return selected
+    return GlobalOffsetEstimate(
+        seconds=envelope.seconds,
+        confidence=selected.confidence,
+        method="spectral-phrase-plus-vocal-envelope-timing",
+        raw_correlation=selected.raw_correlation,
+        peak_margin=selected.peak_margin,
+    )
+
+
 def _resample(
     samples: NDArray[np.float32],
     source_rate: int,
@@ -230,9 +260,7 @@ def _standardized_feature_correlation(left: FloatArray, right: FloatArray) -> fl
     if not np.any(usable):
         return 0.0
     normalized_left = (left[:, usable] - np.mean(left[:, usable], axis=0)) / left_scale[usable]
-    normalized_right = (right[:, usable] - np.mean(right[:, usable], axis=0)) / right_scale[
-        usable
-    ]
+    normalized_right = (right[:, usable] - np.mean(right[:, usable], axis=0)) / right_scale[usable]
     return float(np.mean(normalized_left * normalized_right))
 
 

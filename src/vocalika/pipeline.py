@@ -18,6 +18,7 @@ from vocalika.analysis.offset import (
     estimate_global_offset,
     estimate_spectral_change_offset,
     estimate_vocal_envelope_offset,
+    refine_global_offset,
     select_global_offset,
 )
 from vocalika.analysis.pitch import PitchTrack, PyinPitchExtractor
@@ -247,6 +248,7 @@ def run_analysis(
         offset_estimates,
         config.alignment_offset_minimum_confidence,
     )
+    offset_estimate = refine_global_offset(offset_estimate, offset_estimates)
     offset_estimation_error = "; ".join(offset_estimation_errors) or None
     applied_offset_seconds = (
         offset_estimate.seconds
@@ -306,12 +308,8 @@ def run_analysis(
         "performance_confidence": alignment.performance.confidence[
             alignment.performance_indices
         ].tolist(),
-        "reference_voiced": alignment.reference.voiced[
-            alignment.reference_indices
-        ].tolist(),
-        "performance_voiced": alignment.performance.voiced[
-            alignment.performance_indices
-        ].tolist(),
+        "reference_voiced": alignment.reference.voiced[alignment.reference_indices].tolist(),
+        "performance_voiced": alignment.performance.voiced[alignment.performance_indices].tolist(),
         "valid": comparison.valid.tolist(),
         "absolute_error_cents": comparison.absolute_error_cents.tolist(),
         "relative_error_cents": comparison.relative_error_cents.tolist(),
@@ -373,9 +371,7 @@ def run_analysis(
             "is_isolated_vocal": True,
             "isolation_applied": isolate_performance,
             "original_mix": performance_mix_asset.to_dict() if performance_mix_asset else None,
-            "separation": (
-                performance_separation.to_dict() if performance_separation else None
-            ),
+            "separation": (performance_separation.to_dict() if performance_separation else None),
         },
         "pitch": {
             "extractor": reference_pitch.extractor,

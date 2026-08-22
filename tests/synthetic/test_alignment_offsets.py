@@ -13,6 +13,7 @@ from vocalika.analysis.offset import (
     estimate_global_offset,
     estimate_spectral_change_offset,
     estimate_vocal_envelope_offset,
+    refine_global_offset,
     select_global_offset,
 )
 from vocalika.analysis.pitch import PitchTrack
@@ -167,6 +168,41 @@ def test_spectral_match_wins_over_a_later_repeated_melody_envelope() -> None:
     selected = select_global_offset(candidates, minimum_confidence=0.9)
 
     assert selected is candidates[1]
+
+
+def test_nearby_vocal_envelope_refines_spectral_phrase_timing() -> None:
+    spectral = GlobalOffsetEstimate(
+        4.5,
+        1.0,
+        "spectral-change-correlation",
+        raw_correlation=0.09,
+        peak_margin=0.06,
+    )
+    estimates = [
+        spectral,
+        GlobalOffsetEstimate(
+            4.7,
+            0.66,
+            "smoothed-vocal-envelope-correlation",
+        ),
+    ]
+
+    refined = refine_global_offset(spectral, estimates)
+
+    assert refined is not None
+    assert refined.seconds == pytest.approx(4.7)
+    assert refined.confidence == spectral.confidence
+    assert refined.method == "spectral-phrase-plus-vocal-envelope-timing"
+
+
+def test_distant_envelope_cannot_move_spectral_phrase_match() -> None:
+    spectral = GlobalOffsetEstimate(4.5, 1.0, "spectral-change-correlation")
+    estimates = [
+        spectral,
+        GlobalOffsetEstimate(90.0, 0.99, "smoothed-vocal-envelope-correlation"),
+    ]
+
+    assert refine_global_offset(spectral, estimates) is spectral
 
 
 @pytest.mark.parametrize("expected_offset", [0.1, 0.25, 0.5, -0.25])
