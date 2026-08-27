@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
 import CompareView from "./features/compare/CompareView.vue"
 import ExportView from "./features/export/ExportView.vue"
@@ -7,14 +7,15 @@ import ProjectsView from "./features/projects/ProjectsView.vue"
 import type { NewProjectInput } from "./features/projects/useProjects"
 import { useProjects } from "./features/projects/useProjects"
 import ReferenceView from "./features/reference/ReferenceView.vue"
+import { appRoutePath, parseAppRoute } from "./routes"
+import type { AppRoute, ProjectTab } from "./routes"
 import TakesView from "./features/takes/TakesView.vue"
 import type { AnalysisArtifact, Project, Take } from "./shared/types"
-
-type ProjectTab = "reference" | "takes" | "compare" | "export"
 
 const {
   projects,
   busy,
+  loaded,
   error,
   createProject,
   updateProject,
@@ -22,10 +23,15 @@ const {
   deleteTake,
   loadAnalysis,
 } = useProjects()
-const selectedProjectId = ref<string | null>(null)
-const activeTab = ref<ProjectTab>("reference")
-const selectedTakeId = ref<string | null>(null)
+const initialRoute = parseAppRoute(window.location.pathname)
+const selectedProjectId = ref<string | null>(initialRoute.projectId)
+const activeTab = ref<ProjectTab>(initialRoute.tab)
+const selectedTakeId = ref<string | null>(initialRoute.takeId)
 const artifact = ref<AnalysisArtifact | null>(null)
+let artifactRequest = 0
+if (window.location.pathname !== appRoutePath(initialRoute)) {
+  window.history.replaceState({}, "", appRoutePath(initialRoute))
+}
 
 const selectedProject = computed(() =>
   projects.value.find((project) => project.id === selectedProjectId.value) ?? null,
@@ -40,6 +46,28 @@ const bestMae = computed(() => {
   return values.length ? `${Math.min(...values).toFixed(0)}¢` : "—"
 })
 
+function currentRoute(): AppRoute {
+  return {
+    projectId: selectedProjectId.value,
+    tab: activeTab.value,
+    takeId: selectedTakeId.value,
+  }
+}
+
+function writeRoute(replace = false): void {
+  const path = appRoutePath(currentRoute())
+  if (window.location.pathname === path) return
+  window.history[replace ? "replaceState" : "pushState"]({}, "", path)
+}
+
+function applyRoute(route: AppRoute): void {
+  artifactRequest += 1
+  artifact.value = null
+  selectedProjectId.value = route.projectId
+  activeTab.value = route.tab
+  selectedTakeId.value = route.takeId
+}
+
 function openProject(project: Project): void {
   selectedProjectId.value = project.id
   selectedTakeId.value = [...project.takes].reverse().find(
@@ -47,6 +75,12 @@ function openProject(project: Project): void {
   )?.id ?? null
   artifact.value = null
   activeTab.value = "reference"
+  writeRoute()
+}
+
+function closeProject(): void {
+  applyRoute({ projectId: null, tab: "reference", takeId: null })
+  writeRoute()
 }
 
 async function handleCreate(input: NewProjectInput): Promise<void> {
@@ -70,6 +104,7 @@ async function handleTake(file: File, isolate: boolean): Promise<void> {
     selectedTakeId.value = result.take.id
     artifact.value = result.artifact
     activeTab.value = "compare"
+    writeRoute()
   } catch {
     // useProjects exposes the user-facing error.
   }
@@ -78,8 +113,9 @@ async function handleTake(file: File, isolate: boolean): Promise<void> {
 async function selectTake(take: Take): Promise<void> {
   if (!selectedProject.value || take.status !== "analyzed") return
   selectedTakeId.value = take.id
-  artifact.value = await loadAnalysis(selectedProject.value.id, take.id)
+  artifact.value = null
   activeTab.value = "compare"
+  writeRoute()
 }
 
 async function handleDeleteTake(take: Take): Promise<void> {
@@ -99,19 +135,81 @@ async function handleDeleteTake(take: Take): Promise<void> {
 
 async function chooseTab(tab: ProjectTab): Promise<void> {
   activeTab.value = tab
-  if (tab === "compare" && selectedProject.value && selectedTake.value?.status === "analyzed" && !artifact.value) {
-    artifact.value = await loadAnalysis(selectedProject.value.id, selectedTake.value.id)
-  }
+  writeRoute()
 }
 
 function openExport(): void {
   activeTab.value = "export"
+  writeRoute()
 }
 
 function selectExportTake(takeId: string): void {
   selectedTakeId.value = takeId
   artifact.value = null
+  writeRoute(true)
 }
+
+async function reconcileRoute(): Promise<void> {
+  if (!loaded.value) return
+  const project = selectedProject.value
+  if (!project) {
+    if (selectedProjectId.value) {
+      applyRoute({ projectId: null, tab: "reference", takeId: null })
+      writeRoute(true)
+    }
+    return
+  }
+
+  let take = project.takes.find((candidate) => candidate.id === selectedTakeId.value) ?? null
+  if (activeTab.value === "compare" && take?.status !== "analyzed") {
+    take = [...project.takes].reverse().find(
+      (candidate) => candidate.status === "analyzed",
+    ) ?? null
+    if (!take) {
+      activeTab.value = "takes"
+      selectedTakeId.value = null
+      artifact.value = null
+      writeRoute(true)
+      return
+    }
+    selectedTakeId.value = take.id
+    artifact.value = null
+    writeRoute(true)
+  } else if (activeTab.value === "export" && !take) {
+    take = project.takes.at(-1) ?? null
+    selectedTakeId.value = take?.id ?? null
+    writeRoute(true)
+  } else if (!take && (activeTab.value === "reference" || activeTab.value === "takes")) {
+    take = [...project.takes].reverse().find(
+      (candidate) => candidate.status === "analyzed",
+    ) ?? null
+    selectedTakeId.value = take?.id ?? null
+  }
+
+  if (activeTab.value !== "compare" || take?.status !== "analyzed" || artifact.value) return
+  const request = ++artifactRequest
+  try {
+    const loadedArtifact = await loadAnalysis(project.id, take.id)
+    if (request === artifactRequest
+      && activeTab.value === "compare"
+      && selectedProjectId.value === project.id
+      && selectedTakeId.value === take.id) {
+      artifact.value = loadedArtifact
+    }
+  } catch {
+    if (request === artifactRequest) artifact.value = null
+  }
+}
+
+function handlePopState(): void {
+  applyRoute(parseAppRoute(window.location.pathname))
+}
+
+watch([loaded, selectedProject, activeTab, selectedTakeId], () => void reconcileRoute(), {
+  immediate: true,
+})
+onMounted(() => window.addEventListener("popstate", handlePopState))
+onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
 </script>
 
 <template>
@@ -134,7 +232,7 @@ function selectExportTake(takeId: string): void {
 
       <template v-else>
         <section class="project-header">
-          <button class="back-button" @click="selectedProjectId = null">← ALL PROJECTS</button>
+          <button class="back-button" @click="closeProject">← ALL PROJECTS</button>
           <div class="project-title-row">
             <div>
               <h1>{{ selectedProject.title }}</h1>

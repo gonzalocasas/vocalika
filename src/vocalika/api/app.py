@@ -12,6 +12,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
+from starlette.types import Scope
 
 from vocalika.api.projects import create_projects_router
 from vocalika.api.uploads import safe_upload_name, save_upload
@@ -23,6 +26,17 @@ from vocalika.projects.repository import ProjectRepository
 from vocalika.projects.service import ProjectService
 
 AnalysisRunner = Callable[..., Path]
+
+
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as error:
+            is_app_route = not path.startswith("api/") and not Path(path).suffix
+            if error.status_code != 404 or not is_app_route:
+                raise
+            return await super().get_response("index.html", scope)
 
 
 class AnalysisSelection(BaseModel):
@@ -245,5 +259,5 @@ def create_app(
         return FileResponse(candidate)
 
     if frontend_directory is not None and frontend_directory.is_dir():
-        app.mount("/", StaticFiles(directory=frontend_directory, html=True), name="frontend")
+        app.mount("/", SPAStaticFiles(directory=frontend_directory, html=True), name="frontend")
     return app

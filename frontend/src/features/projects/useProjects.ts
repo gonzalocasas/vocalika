@@ -13,11 +13,13 @@ export interface NewProjectInput {
 export function useProjects() {
   const projects = ref<Project[]>([])
   const busy = ref(false)
+  const loaded = ref(false)
   const error = ref("")
 
   async function refresh(): Promise<void> {
     const payload = await apiJson<{ projects: Project[] }>("/api/projects")
     projects.value = payload.projects
+    loaded.value = true
   }
 
   async function createProject(input: NewProjectInput): Promise<Project> {
@@ -123,6 +125,7 @@ export function useProjects() {
   return {
     projects,
     busy,
+    loaded,
     error,
     refresh,
     createProject,

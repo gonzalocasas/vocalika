@@ -41,6 +41,24 @@ async def test_app_starts_without_an_active_analysis(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
+async def test_frontend_routes_fall_back_to_spa_index(tmp_path: Path) -> None:
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+    (frontend / "index.html").write_text("<h1>Vocalika</h1>", encoding="utf-8")
+    app = create_app(None, frontend)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        route = await client.get("/projects/project-1/compare/take-2")
+        missing_asset = await client.get("/assets/missing.js")
+        missing_api = await client.get("/api/missing")
+
+    assert route.status_code == 200
+    assert route.text == "<h1>Vocalika</h1>"
+    assert missing_asset.status_code == 404
+    assert missing_api.status_code == 404
+
+
+@pytest.mark.anyio
 async def test_aligned_waveform_envelopes_are_served(tmp_path: Path) -> None:
     sample_rate = 8_000
     times = np.arange(sample_rate, dtype=np.float32) / sample_rate
