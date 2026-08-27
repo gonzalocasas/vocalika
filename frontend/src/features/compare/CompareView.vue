@@ -3,6 +3,11 @@ import type { PlotlyHTMLElement, PlotRelayoutEvent } from "plotly.js-dist-min"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
 import { calculateRangeSummary } from "../../metrics"
+import {
+  performanceToReferenceTime,
+  referenceToPerformanceTime,
+  resolvePlaybackOffset,
+} from "../../playbackTiming"
 import { displayContour, rawContour } from "../../plotData"
 import { apiJson } from "../../shared/api"
 import type { AlignedWaveforms, AnalysisArtifact, Project, Take } from "../../shared/types"
@@ -21,6 +26,11 @@ const showPerformance = ref(true)
 const showWaveforms = ref(true)
 const showPoints = ref(false)
 const times = props.artifact.comparison.frames.reference_time
+const takePlaybackOffset = resolvePlaybackOffset(
+  props.artifact.alignment,
+  props.artifact.comparison.frames.reference_time,
+  props.artifact.comparison.frames.performance_time,
+)
 const selectionStart = ref(times[0] ?? 0)
 const selectionEnd = ref(Math.min(times.at(-1) ?? 30, 30))
 const looping = ref(false)
@@ -188,21 +198,11 @@ async function render(): Promise<void> {
 }
 
 function mappedPerformanceTime(referenceTime: number): number {
-  const frames = props.artifact.comparison.frames
-  let best = 0
-  for (let index = 1; index < frames.reference_time.length; index += 1) {
-    if (Math.abs(frames.reference_time[index] - referenceTime) < Math.abs(frames.reference_time[best] - referenceTime)) best = index
-  }
-  return frames.performance_time[best] ?? referenceTime
+  return referenceToPerformanceTime(referenceTime, takePlaybackOffset)
 }
 
 function mappedReferenceTime(performanceTime: number): number {
-  const frames = props.artifact.comparison.frames
-  let best = 0
-  for (let index = 1; index < frames.performance_time.length; index += 1) {
-    if (Math.abs(frames.performance_time[index] - performanceTime) < Math.abs(frames.performance_time[best] - performanceTime)) best = index
-  }
-  return frames.reference_time[best] ?? performanceTime
+  return performanceToReferenceTime(performanceTime, takePlaybackOffset)
 }
 
 async function drawPlaybackCursor(position: number): Promise<void> {
