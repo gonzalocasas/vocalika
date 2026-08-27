@@ -175,6 +175,16 @@ def create_projects_router(service: ProjectService) -> APIRouter:
             "artifact": artifact,
         }
 
+    @router.delete("/{project_id}/takes/{take_id}")
+    async def delete_take(project_id: str, take_id: str) -> dict[str, Any]:
+        try:
+            project = await run_in_threadpool(service.delete_take, project_id, take_id)
+        except (ProjectNotFoundError, LookupError) as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except (OSError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return {"project": _project_payload(project)}
+
     @router.get("/{project_id}/takes/{take_id}/analysis")
     def take_analysis(project_id: str, take_id: str) -> dict[str, Any]:
         return {"artifact": _artifact_for_take(service, project_id, take_id)}

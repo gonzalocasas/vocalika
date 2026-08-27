@@ -213,6 +213,29 @@ class ProjectService:
         project = self._replace_take(project, completed)
         return project, completed, artifact
 
+    def delete_take(self, project_id: str, take_id: str) -> Project:
+        project = self.repository.load(project_id)
+        try:
+            next(take for take in project.takes if take.id == take_id)
+        except StopIteration as error:
+            raise LookupError(f"Take not found: {take_id}") from error
+
+        takes_directory = (self.repository.project_directory(project_id) / "takes").resolve()
+        take_directory = (takes_directory / take_id).resolve()
+        if take_directory.parent != takes_directory:
+            raise ValueError("Invalid take id")
+        if take_directory.exists():
+            shutil.rmtree(take_directory)
+
+        return self.repository.update(
+            project_id,
+            lambda current: replace(
+                current,
+                takes=tuple(take for take in current.takes if take.id != take_id),
+                updated_at=_now(),
+            ),
+        )
+
     def _replace_take(self, project: Project, replacement: Take) -> Project:
         return self.repository.update(
             project.id,

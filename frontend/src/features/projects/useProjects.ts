@@ -96,9 +96,39 @@ export function useProjects() {
     return payload.artifact
   }
 
+  async function deleteTake(projectId: string, takeId: string): Promise<Project> {
+    busy.value = true
+    error.value = ""
+    try {
+      const payload = await apiJson<{ project: Project }>(
+        `/api/projects/${projectId}/takes/${takeId}`,
+        { method: "DELETE" },
+      )
+      projects.value = projects.value.map((project) =>
+        project.id === projectId ? payload.project : project,
+      )
+      return payload.project
+    } catch (reason) {
+      error.value = reason instanceof Error ? reason.message : String(reason)
+      throw reason
+    } finally {
+      busy.value = false
+    }
+  }
+
   onMounted(() => void refresh().catch((reason) => {
     error.value = reason instanceof Error ? reason.message : String(reason)
   }))
 
-  return { projects, busy, error, refresh, createProject, updateProject, addTake, loadAnalysis }
+  return {
+    projects,
+    busy,
+    error,
+    refresh,
+    createProject,
+    updateProject,
+    addTake,
+    deleteTake,
+    loadAnalysis,
+  }
 }

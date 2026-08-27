@@ -88,9 +88,18 @@ async def test_projects_and_unanalyzed_takes_persist_across_app_instances(tmp_pa
         )
         assert browser_take.status_code == 200
         browser_take_id = browser_take.json()["take"]["id"]
+        browser_take_directory = Path(browser_take.json()["take"]["source_path"]).parent
         waveform = await client.get(f"/api/projects/{project_id}/takes/{browser_take_id}/waveform")
         assert waveform.status_code == 200
         assert len(waveform.json()["amplitude"]) == 100
+
+        deleted = await client.delete(f"/api/projects/{project_id}/takes/{browser_take_id}")
+        assert deleted.status_code == 200
+        assert [take["name"] for take in deleted.json()["project"]["takes"]] == ["Morning take"]
+        assert not browser_take_directory.exists()
+        assert (
+            await client.delete(f"/api/projects/{project_id}/takes/{browser_take_id}")
+        ).status_code == 404
 
     restarted = create_app(
         None,

@@ -12,7 +12,16 @@ import type { AnalysisArtifact, Project, Take } from "./shared/types"
 
 type ProjectTab = "reference" | "takes" | "compare" | "export"
 
-const { projects, busy, error, createProject, updateProject, addTake, loadAnalysis } = useProjects()
+const {
+  projects,
+  busy,
+  error,
+  createProject,
+  updateProject,
+  addTake,
+  deleteTake,
+  loadAnalysis,
+} = useProjects()
 const selectedProjectId = ref<string | null>(null)
 const activeTab = ref<ProjectTab>("reference")
 const selectedTakeId = ref<string | null>(null)
@@ -71,6 +80,21 @@ async function selectTake(take: Take): Promise<void> {
   selectedTakeId.value = take.id
   artifact.value = await loadAnalysis(selectedProject.value.id, take.id)
   activeTab.value = "compare"
+}
+
+async function handleDeleteTake(take: Take): Promise<void> {
+  if (!selectedProject.value) return
+  try {
+    const project = await deleteTake(selectedProject.value.id, take.id)
+    if (selectedTakeId.value === take.id) {
+      selectedTakeId.value = [...project.takes].reverse().find(
+        (candidate) => candidate.status === "analyzed",
+      )?.id ?? null
+      artifact.value = null
+    }
+  } catch {
+    // useProjects exposes the user-facing error.
+  }
 }
 
 async function chooseTab(tab: ProjectTab): Promise<void> {
@@ -141,6 +165,7 @@ function selectExportTake(takeId: string): void {
           :selected-take-id="selectedTakeId"
           @submit="handleTake"
           @select="selectTake"
+          @delete="handleDeleteTake"
           @update-lyrics="(lyrics) => handleUpdate({ lyrics })"
         />
         <CompareView
