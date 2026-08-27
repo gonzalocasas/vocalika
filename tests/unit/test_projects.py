@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -9,6 +10,8 @@ import soundfile as sf
 from httpx import ASGITransport, AsyncClient
 
 from vocalika.api.app import create_app
+from vocalika.projects.models import Project, ProjectReference, Take
+from vocalika.projects.repository import ProjectRepository
 
 
 def _wav_bytes(path: Path, frequency: float = 220.0) -> bytes:
@@ -125,3 +128,74 @@ async def test_project_ids_reject_path_traversal(tmp_path: Path) -> None:
         response = await client.get("/api/projects/not-a-project")
 
     assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_analyzed_take_playback_prefers_normalized_audio(tmp_path: Path) -> None:
+    projects = tmp_path / "projects"
+    project_id = "a" * 32
+    take_id = "b" * 32
+    project_directory = projects / project_id
+    reference = project_directory / "reference" / "reference.wav"
+    source = project_directory / "takes" / take_id / "source.webm"
+    analysis_audio = project_directory / "takes" / take_id / "analysis" / "normalized.wav"
+    artifact_path = project_directory / "takes" / take_id / "analysis" / "analysis.json"
+    reference.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True)
+    analysis_audio.parent.mkdir(parents=True)
+    reference.write_bytes(b"reference")
+    source.write_bytes(b"raw-webm")
+    analysis_audio.write_bytes(b"normalized-wav")
+    artifact_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "performance": {
+                    "analysis_source": {"path": str(source)},
+                    "analysis_audio": str(analysis_audio),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    ProjectRepository(projects).save(
+        Project(
+            id=project_id,
+            title="Practice song",
+            created_at="2026-08-27T00:00:00+00:00",
+            updated_at="2026-08-27T00:00:00+00:00",
+            reference=ProjectReference(
+                title="Reference",
+                source_type="local",
+                source_url=None,
+                original_path=str(reference),
+                vocal_path=str(reference),
+                instrumental_path=None,
+                duration_seconds=1.0,
+                sample_rate=16_000,
+                separation_model=None,
+                separation_cached=False,
+            ),
+            takes=(
+                Take(
+                    id=take_id,
+                    name="Browser take",
+                    created_at="2026-08-27T00:00:00+00:00",
+                    source_path=str(source),
+                    isolate_performance=False,
+                    status="analyzed",
+                    analysis_path=str(artifact_path),
+                ),
+            ),
+        )
+    )
+    app = create_app(None, projects_directory=projects)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        vocal = await client.get(f"/api/projects/{project_id}/takes/{take_id}/audio/vocal")
+        raw = await client.get(f"/api/projects/{project_id}/takes/{take_id}/audio/source")
+
+    assert vocal.status_code == 200
+    assert vocal.content == b"normalized-wav"
+    assert raw.status_code == 200
+    assert raw.content == b"raw-webm"

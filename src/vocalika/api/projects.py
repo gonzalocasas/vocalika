@@ -252,7 +252,17 @@ def create_projects_router(service: ProjectService) -> APIRouter:
         candidate = Path(take.source_path)
         if kind == "vocal" and take.analysis_path is not None:
             artifact = load_artifact(Path(take.analysis_path))
-            candidate = Path(artifact["performance"]["analysis_source"]["path"])
+            performance = artifact.get("performance", {})
+            analysis_source = performance.get("analysis_source") or {}
+            playback_candidates = (
+                performance.get("analysis_audio"),
+                analysis_source.get("path"),
+                take.source_path,
+            )
+            candidate = next(
+                (Path(path) for path in playback_candidates if path and Path(path).is_file()),
+                Path(take.source_path),
+            )
         if not candidate.is_file():
             raise HTTPException(status_code=404, detail="Take audio is unavailable.")
         return FileResponse(candidate)
