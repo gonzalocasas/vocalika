@@ -15,6 +15,7 @@ const emit = defineEmits<{
 
 const file = ref<File | null>(null)
 const isolate = ref(false)
+const studioOpen = ref(false)
 
 function chooseFile(event: Event): void {
   file.value = (event.target as HTMLInputElement).files?.[0] ?? null
@@ -84,12 +85,20 @@ function requestDelete(take: Take): void {
           {{ busy ? "ANALYZING…" : "ANALYZE TAKE" }}
         </button>
       </section>
-      <RecordingStudio
-        :project="project"
-        :busy="busy"
-        @submit="(recording, shouldIsolate) => emit('submit', recording, shouldIsolate)"
-        @update-lyrics="(lyrics) => emit('updateLyrics', lyrics)"
-      />
+      <section class="add-take-panel record-launcher">
+        <p class="mono-eyebrow accent-text">RECORD A TAKE</p>
+        <p class="feature-note">Sing along with the reference and watch your pitch as you go.</p>
+        <button class="record-button" @click="studioOpen = true">● OPEN RECORDING STUDIO</button>
+      </section>
     </aside>
+
+    <RecordingStudio
+      v-if="studioOpen"
+      :project="project"
+      :busy="busy"
+      @submit="(recording, shouldIsolate) => emit('submit', recording, shouldIsolate)"
+      @update-lyrics="(lyrics) => emit('updateLyrics', lyrics)"
+      @close="studioOpen = false"
+    />
   </div>
 </template>

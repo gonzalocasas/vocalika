@@ -127,14 +127,10 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .take-mae span { display:block; color:#7c817f; font-size:9px; letter-spacing:.14em; }
 .take-mae strong { display:block; margin-top:6px; color:#d9992e; font:500 20px "IBM Plex Mono",monospace; }
 .take-tools { display:grid; align-content:start; gap:16px; }
-.add-take-panel,.recording-studio { border:1px dashed #3a4042; border-radius:16px; padding:22px; background:#1b1e20; }
+.add-take-panel { border:1px dashed #3a4042; border-radius:16px; padding:22px; background:#1b1e20; }
 .compact-drop { margin:14px 0; }
-.recording-studio { border-style:solid; border-color:#33383a; background:#212527; }
-.lyrics-field { display:grid; gap:7px; margin:16px 0; }
-.lyrics-field>span,.monitor-slider>span { color:#a8a49a; font:500 9px "IBM Plex Mono",monospace; letter-spacing:.14em; }
-.lyrics-field textarea { width:100%; min-height:180px; resize:vertical; border:1px solid #33383a; border-radius:9px; padding:12px; outline:none; background:#0e1112; color:#e8e2d6; font-size:13px; line-height:1.6; }
-.lyrics-field textarea:focus { border-color:#d9992e; }
-.lyrics-field small,.monitor-slider small { color:#7c817f; font-size:10px; }
+.monitor-slider>span { color:#a8a49a; font:500 9px "IBM Plex Mono",monospace; letter-spacing:.14em; }
+.monitor-slider small { color:#7c817f; font-size:10px; }
 .monitor-slider { display:grid; gap:7px; margin:15px 0; }
 .monitor-slider>span { display:flex; justify-content:space-between; }
 .pitch-ribbon { margin:14px 0 6px; border:1px solid #33383a; }
@@ -148,8 +144,40 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .record-button { width:100%; background:#f0e9dc; color:#17191a; }
 .record-button.live { background:#c96f3e; color:#17191a; }
 .recorded-preview { display:block; width:100%; margin:12px 0; }
-.recording-studio .text-button { width:100%; margin-top:10px; }
+.recording-controls .text-button { width:100%; margin-top:10px; }
 .inline-error { color:#d99a7b; font-size:11px; }
+
+/* --- recording studio modal --------------------------------------------- */
+body.modal-open { overflow:hidden; }
+.record-launcher { border-style:solid; border-color:#33383a; background:#212527; }
+.record-launcher .record-button { margin-top:14px; }
+.recording-overlay { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(8,10,11,.78); backdrop-filter:blur(3px); }
+.recording-modal { display:flex; flex-direction:column; width:min(1180px,100%); height:min(880px,100%); overflow:hidden; border:1px solid #3a4042; border-radius:18px; background:#17191a; box-shadow:0 30px 80px rgba(0,0,0,.55); }
+.recording-modal-header { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:20px 24px; border-bottom:1px solid #26292b; }
+.recording-modal-header h3 { margin:4px 0 0; font-size:22px; }
+.recording-modal-tools { display:flex; align-items:center; gap:8px; }
+.tool-button { border:1px solid #33383a; border-radius:8px; padding:8px 12px; background:#1b1e20; color:#a8a49a; font:500 10px "IBM Plex Mono",monospace; letter-spacing:.1em; cursor:pointer; }
+.tool-button:hover:not(:disabled) { border-color:#f0e9dc; color:#e8e2d6; }
+.tool-button:disabled { opacity:.4; cursor:not-allowed; }
+.tool-button.close { padding:8px 13px; font-size:13px; }
+.recording-modal-body { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:0; flex:1; min-height:0; }
+.lyrics-stage { display:flex; min-height:0; padding:26px 30px; overflow:hidden; }
+/* Lyrics are the reason the modal exists, so they get the room and the size. */
+.lyrics-read { flex:1; min-height:0; overflow-y:auto; white-space:pre-wrap; color:#efe9dd; line-height:1.75; letter-spacing:.01em; }
+.lyrics-editor { flex:1; min-height:0; resize:none; border:1px solid #33383a; border-radius:10px; padding:16px; outline:none; background:#0e1112; color:#e8e2d6; font-size:15px; line-height:1.7; font-family:inherit; }
+.lyrics-editor:focus { border-color:#d9992e; }
+.lyrics-empty { align-self:center; margin:auto; max-width:340px; text-align:center; color:#7c817f; font-size:13px; line-height:1.7; }
+.recording-controls { display:flex; flex-direction:column; padding:22px; overflow-y:auto; border-left:1px solid #26292b; background:#1b1e20; }
+.recording-controls .monitor-slider { margin-top:auto; padding-top:18px; }
+/* While recording, chrome recedes so the lyrics and the ribbon carry the eye. */
+.recording-modal.recording .recording-modal-header { opacity:.55; }
+.recording-modal.recording .lyrics-read { color:#fff; }
+@media(max-width:900px){
+  .recording-modal-body { grid-template-columns:1fr; grid-template-rows:minmax(0,1fr) auto; }
+  .recording-controls { border-left:0; border-top:1px solid #26292b; }
+  .lyrics-stage { padding:18px; }
+}
+
 .compare-view { display:grid; gap:18px; }
 .compare-heading h2 { font-size:24px; }
 .compare-switches { display:flex; gap:10px; }
