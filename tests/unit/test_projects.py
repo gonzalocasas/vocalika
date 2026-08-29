@@ -232,9 +232,7 @@ async def test_a_project_can_be_renamed_and_the_new_name_persists(tmp_path: Path
     )
     async with AsyncClient(transport=ASGITransport(app=reloaded), base_url="http://test") as client:
         listed = await client.get("/api/projects")
-        assert [p["title"] for p in listed.json()["projects"]] == [
-            "Plegaria para un niño dormido"
-        ]
+        assert [p["title"] for p in listed.json()["projects"]] == ["Plegaria para un niño dormido"]
 
 
 @pytest.mark.anyio
@@ -256,9 +254,7 @@ async def test_a_blank_rename_keeps_the_existing_name(tmp_path: Path) -> None:
         project_id = created.json()["project"]["id"]
 
         for blank in ("", "   ", "\n\t"):
-            response = await client.patch(
-                f"/api/projects/{project_id}", json={"title": blank}
-            )
+            response = await client.patch(f"/api/projects/{project_id}", json={"title": blank})
             assert response.status_code == 200
             assert response.json()["project"]["title"] == "Keeps its name"
 
