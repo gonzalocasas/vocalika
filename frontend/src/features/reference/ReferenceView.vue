@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 
 import { apiJson } from "../../shared/api"
+import { seekTimeAt } from "./seek"
 import type { Project, WaveformEnvelope } from "../../shared/types"
 
 const props = defineProps<{ project: Project }>()
@@ -22,6 +23,7 @@ const amplitudes = ref<number[]>([])
 const vocalAudio = ref<HTMLAudioElement | null>(null)
 const instrumentalAudio = ref<HTMLAudioElement | null>(null)
 let animationFrame: number | undefined
+let scrubbing = false
 
 const duration = computed(() => props.project.reference.duration_seconds)
 const selectionDuration = computed(() => Math.max(0, trimEnd.value - trimStart.value))
@@ -102,6 +104,47 @@ async function startAudio(from: number): Promise<void> {
   updatePlayhead()
 }
 
+/**
+ * Move playback to a position on the waveform.
+ *
+ * Seeking while stopped leaves the transport in the paused state rather than
+ * stopped, so the next press resumes from the chosen point instead of
+ * rewinding to the trim start.
+ */
+function seekTo(time: number): void {
+  playhead.value = time
+  for (const audio of [vocalAudio.value, instrumentalAudio.value]) {
+    if (audio) audio.currentTime = time
+  }
+  if (playbackState.value === "stopped") playbackState.value = "paused"
+}
+
+function seekFromPointer(event: PointerEvent): void {
+  const element = event.currentTarget as HTMLElement
+  const box = element.getBoundingClientRect()
+  seekTo(seekTimeAt(event.clientX, box, duration.value, trimStart.value, trimEnd.value))
+}
+
+function beginScrub(event: PointerEvent): void {
+  const element = event.currentTarget as HTMLElement
+  // Capture so a drag that leaves the waveform keeps scrubbing instead of
+  // stopping wherever the pointer happened to cross the edge.
+  element.setPointerCapture(event.pointerId)
+  scrubbing = true
+  seekFromPointer(event)
+}
+
+function continueScrub(event: PointerEvent): void {
+  if (scrubbing) seekFromPointer(event)
+}
+
+function endScrub(event: PointerEvent): void {
+  if (!scrubbing) return
+  scrubbing = false
+  const element = event.currentTarget as HTMLElement
+  if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId)
+}
+
 async function play(): Promise<void> {
   if (playing.value) {
     pausePlayback()
@@ -164,7 +207,13 @@ onBeforeUnmount(stop)
 
       <div class="waveform-screen">
         <div class="time-ruler"><span>0:00</span><span>{{ formatTime(duration / 2) }}</span><span>{{ formatTime(duration) }}</span></div>
-        <div class="reference-waveform">
+        <div
+          class="reference-waveform seekable"
+          @pointerdown="beginScrub"
+          @pointermove="continueScrub"
+          @pointerup="endScrub"
+          @pointercancel="endScrub"
+        >
           <i
             v-for="(amplitude, index) in amplitudes"
             :key="index"
