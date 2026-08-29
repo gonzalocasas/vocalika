@@ -227,7 +227,9 @@ async def test_a_project_can_be_renamed_and_the_new_name_persists(tmp_path: Path
         # Renaming must not disturb the settings it was not asked to change.
         assert renamed.json()["project"]["reference"]["duration_seconds"] > 0
 
-    reloaded = create_app(None, projects_directory=projects, library_directory=tmp_path / "analyses")
+    reloaded = create_app(
+        None, projects_directory=projects, library_directory=tmp_path / "analyses"
+    )
     async with AsyncClient(transport=ASGITransport(app=reloaded), base_url="http://test") as client:
         listed = await client.get("/api/projects")
         assert [p["title"] for p in listed.json()["projects"]] == [
