@@ -229,6 +229,48 @@ def test_repairs_brief_octave_detector_error() -> None:
     np.testing.assert_allclose(cleaned.midi[glitch], 64.0, atol=0.01)
 
 
+def test_keeps_a_sustained_note_through_a_confidence_dip() -> None:
+    """A dip inside an established note must not perforate it.
+
+    pyin's confidence sags mid-note on real material -- especially on
+    separated stems, where residual accompaniment depresses it throughout.
+    Judging each frame against a single threshold discarded the majority of
+    what the singer audibly sang, so a run is kept once any frame in it
+    clears the onset threshold.
+    """
+    track = make_track()
+    dip = slice(300, 380)
+    track.confidence[dip] = 0.30
+
+    cleaned = clean_pitch_track(track)
+
+    assert np.isfinite(cleaned.midi[dip]).all()
+    np.testing.assert_allclose(cleaned.midi[dip], 64.0, atol=0.01)
+
+
+def test_discards_a_run_that_never_becomes_confident() -> None:
+    """Sustain alone must not admit a note; something has to start it."""
+    track = make_track()
+    weak = slice(300, 380)
+    track.confidence[:300] = 0.0
+    track.confidence[380:] = 0.0
+    track.confidence[weak] = 0.30
+
+    cleaned = clean_pitch_track(track)
+
+    assert not np.isfinite(cleaned.midi).any()
+
+
+def test_frames_below_the_sustain_floor_are_still_dropped() -> None:
+    track = make_track()
+    silence = slice(300, 380)
+    track.confidence[silence] = 0.05
+
+    cleaned = clean_pitch_track(track)
+
+    assert not np.isfinite(cleaned.midi[silence]).any()
+
+
 def test_stable_pitch_centers_recover_global_shift() -> None:
     alignment = align_pitch_tracks(make_track(), make_track(pitch_shift=0.5))
     comparison = compare_alignment(alignment)

@@ -1,8 +1,37 @@
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import NDArray
 
 from vocalika.analysis.pitch import PitchTrack
+
+BoolArray = NDArray[np.bool_]
+FloatArray = NDArray[np.float64]
+
+
+def _sustained(
+    voiced: BoolArray,
+    confidence: FloatArray,
+    onset_threshold: float,
+    sustain_threshold: float,
+) -> BoolArray:
+    """Keep a run of frames once any frame in it clears the onset threshold.
+
+    A singer does not restart phonation frame to frame, so the evidence needed
+    to stay inside a note is lower than the evidence needed to declare one.
+    Judging every frame independently against a single threshold perforates
+    sustained notes wherever confidence dips -- on separated stems, where
+    residual accompaniment depresses pyin's confidence throughout, it discards
+    the majority of what the singer audibly sang.
+    """
+    candidate = voiced & (confidence >= sustain_threshold)
+    onset = candidate & (confidence >= onset_threshold)
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], candidate.astype(np.int8), [0]))))
+    kept = np.zeros(candidate.size, dtype=bool)
+    for start, end in zip(edges[::2], edges[1::2], strict=True):
+        if onset[start:end].any():
+            kept[start:end] = True
+    return kept
 
 
 def clean_pitch_track(
@@ -10,10 +39,16 @@ def clean_pitch_track(
     confidence_threshold: float = 0.55,
     octave_window: int = 9,
     max_gap_seconds: float = 0.08,
+    sustain_confidence_threshold: float = 0.20,
 ) -> PitchTrack:
     """Filter uncertain frames, repair obvious octave jumps, and fill tiny gaps."""
     midi = track.raw_midi.copy()
-    reliable = np.isfinite(midi) & track.voiced & (track.confidence >= confidence_threshold)
+    reliable = np.isfinite(midi) & _sustained(
+        track.voiced,
+        track.confidence,
+        confidence_threshold,
+        min(sustain_confidence_threshold, confidence_threshold),
+    )
     midi[~reliable] = np.nan
 
     half_window = octave_window // 2
