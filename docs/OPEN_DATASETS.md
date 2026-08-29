@@ -34,7 +34,14 @@ uv run pytest -m open_data
 ```
 
 The Vocadito tests compare Vocalika's pYIN estimates with published frame-level
-F0 annotations. The MAST tests send published CREPE tracks through Vocalika's
+F0 annotations across all 40 tracks, covering 29 singers and 9 languages. Each
+track is scored against a recorded per-track baseline in
+`tests/integration/vocadito_pitch_baseline.csv`, with tolerances wide enough to
+absorb a reimplementation of pYIN but narrow enough to fail on a real accuracy
+regression. Per-track bars key off the median cents error rather than
+the mean, because pYIN drops an octave on a small number of frames in tracks
+17, 18, 29, and 34 -- a known weakness pinned by its own test so it cannot
+spread silently. The MAST tests send published CREPE tracks through Vocalika's
 alignment and comparison layers. They include a targeted temporal-alignment
 regression and a dataset-wide benchmark covering all exactly paired
 performances unanimously rated either perfect or completely off.
@@ -44,9 +51,11 @@ performances unanimously rated either perfect or completely off.
 Both datasets are licensed under the [Creative Commons Attribution 4.0
 International license](https://creativecommons.org/licenses/by/4.0/). Vocalika
 does not redistribute the downloaded records, and the fetched source files are
-left unchanged. During the Vocadito test, a temporary eight-second excerpt is
-resampled to 16 kHz to match Vocalika's analysis format; the MAST CREPE F0
-arrays are read as published.
+left unchanged. During the Vocadito tests each track is resampled in full to
+16 kHz to match Vocalika's analysis format; the MAST CREPE F0 arrays are read as
+published. Scoring all 40 tracks is the dominant cost of the open-data suite --
+about 13.6 minutes of audio through pYIN -- so extraction is parallelized across
+processes and shared by every Vocadito test via a session fixture.
 
 ### Vocadito
 
