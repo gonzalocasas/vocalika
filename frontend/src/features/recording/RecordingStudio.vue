@@ -6,6 +6,7 @@ import type { Project } from "../../shared/types"
 import PitchRibbon from "./PitchRibbon.vue"
 import type { ReferenceContour } from "./pitchRibbon"
 import { referenceMidiAt } from "./pitchRibbon"
+import { createScrollProgress, easeToward } from "./lyricsScroll"
 import { useLivePitch } from "./useLivePitch"
 import { useMicrophoneRecorder } from "./useMicrophoneRecorder"
 
@@ -31,7 +32,13 @@ const livePitch = useLivePitch()
 const recordedUrl = ref("")
 const contour = ref<ReferenceContour | null>(null)
 const monitorTime = ref(0)
+const lyricsView = ref<HTMLElement | null>(null)
+const autoScroll = ref(true)
 let stopTimer: number | undefined
+let scrollFrame: number | undefined
+let lastFrameAt = 0
+let suspendScrollUntil = 0
+let easedScrollTop = Number.NaN
 
 const recording = computed(() => recorder.state.value === "recording")
 const paused = computed(() => recorder.state.value === "paused")
@@ -70,6 +77,39 @@ const liveCents = computed(() => {
   const target = referenceMidiAt(contour.value, sample.time)
   return target === null ? null : Math.round((sample.midi - target) * 100)
 })
+
+const scrollProgress = computed(() =>
+  createScrollProgress(contour.value, props.project.trim_start_seconds, referenceEnd()),
+)
+
+/**
+ * Follow the lyric while a take runs.
+ *
+ * Position comes from how much of the reference vocal has been sung, so the
+ * page holds still through an intro or a solo instead of running ahead. The
+ * eased assignment keeps it a drift rather than a series of small jumps.
+ */
+function scrollLoop(timestamp: number): void {
+  const element = lyricsView.value
+  const delta = lastFrameAt ? Math.min(100, timestamp - lastFrameAt) : 16
+  lastFrameAt = timestamp
+  if (element && autoScroll.value && inTake.value && timestamp >= suspendScrollUntil) {
+    const range = element.scrollHeight - element.clientHeight
+    if (range > 4) {
+      const target = scrollProgress.value.at(monitorTime.value) * range
+      const from = Number.isFinite(easedScrollTop) ? easedScrollTop : element.scrollTop
+      easedScrollTop = easeToward(from, target, delta)
+      element.scrollTop = easedScrollTop
+    }
+  }
+  scrollFrame = window.requestAnimationFrame(scrollLoop)
+}
+
+/** A singer looking ahead should not have to fight the page back. */
+function noteManualScroll(): void {
+  suspendScrollUntil = performance.now() + 4000
+  easedScrollTop = Number.NaN
+}
 
 const timecode = computed(() => {
   const minutes = Math.floor(recorder.elapsedSeconds.value / 60)
@@ -138,6 +178,9 @@ async function startRecording(): Promise<void> {
     instrumentalAudio.value.currentTime = start
     instrumentalAudio.value.volume = 1
   }
+  if (lyricsView.value) lyricsView.value.scrollTop = 0
+  easedScrollTop = Number.NaN
+  suspendScrollUntil = 0
   await playMonitor()
   armStopTimer()
   await startLivePitch()
@@ -199,6 +242,7 @@ onMounted(() => {
   }
   window.addEventListener("keydown", onKeydown)
   document.body.classList.add("modal-open")
+  scrollFrame = window.requestAnimationFrame(scrollLoop)
 })
 watch(() => [props.project.id, props.project.transpose_semitones], loadContour)
 onBeforeUnmount(() => {
@@ -207,6 +251,7 @@ onBeforeUnmount(() => {
   if (recordedUrl.value) window.URL.revokeObjectURL(recordedUrl.value)
   window.removeEventListener("keydown", onKeydown)
   document.body.classList.remove("modal-open")
+  if (scrollFrame !== undefined) window.cancelAnimationFrame(scrollFrame)
 })
 watch(() => props.project.lyrics, (value) => { lyrics.value = value })
 </script>
@@ -226,6 +271,15 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
             :disabled="inTake"
             @click="editingLyrics = !editingLyrics"
           >{{ editingLyrics ? "DONE" : "EDIT LYRICS" }}</button>
+          <button
+            type="button"
+            class="tool-button"
+            :class="{ armed: autoScroll }"
+            :title="scrollProgress.usesVoicedTime
+              ? 'Follows the reference vocal, so the page waits through instrumental sections'
+              : 'No reference contour, so the page follows elapsed time'"
+            @click="autoScroll = !autoScroll"
+          >FOLLOW {{ autoScroll ? "ON" : "OFF" }}</button>
           <button type="button" class="tool-button" @click="setFontStep(fontStep - 1)">A−</button>
           <button type="button" class="tool-button" @click="setFontStep(fontStep + 1)">A+</button>
           <button type="button" class="tool-button close" @click="requestClose">✕</button>
@@ -241,7 +295,14 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
             placeholder="Paste the song lyrics here…"
             @blur="emit('updateLyrics', lyrics)"
           ></textarea>
-          <div v-else-if="lyrics.trim()" class="lyrics-read" :style="{ fontSize: lyricsFontSize }">{{ lyrics }}</div>
+          <div
+            v-else-if="lyrics.trim()"
+            ref="lyricsView"
+            class="lyrics-read"
+            :style="{ fontSize: lyricsFontSize }"
+            @wheel="noteManualScroll"
+            @touchmove="noteManualScroll"
+          >{{ lyrics }}</div>
           <p v-else class="lyrics-empty">
             No lyrics yet. Choose <b>EDIT LYRICS</b> to paste them in — they stay
             with this project.

@@ -165,11 +165,12 @@ body.modal-open { overflow:hidden; }
 .tool-button { border:1px solid #33383a; border-radius:8px; padding:8px 12px; background:#1b1e20; color:#a8a49a; font:500 10px "IBM Plex Mono",monospace; letter-spacing:.1em; cursor:pointer; }
 .tool-button:hover:not(:disabled) { border-color:#f0e9dc; color:#e8e2d6; }
 .tool-button:disabled { opacity:.4; cursor:not-allowed; }
+.tool-button.armed { border-color:#4f8d7b; color:#7fd3ba; }
 .tool-button.close { padding:8px 13px; font-size:13px; }
 .recording-modal-body { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:0; flex:1; min-height:0; }
 .lyrics-stage { display:flex; min-height:0; padding:26px 30px; overflow:hidden; }
 /* Lyrics are the reason the modal exists, so they get the room and the size. */
-.lyrics-read { flex:1; min-height:0; overflow-y:auto; white-space:pre-wrap; color:#efe9dd; line-height:1.75; letter-spacing:.01em; }
+.lyrics-read { flex:1; min-height:0; overflow-y:auto; scroll-behavior:auto; overscroll-behavior:contain; white-space:pre-wrap; color:#efe9dd; line-height:1.75; letter-spacing:.01em; }
 .lyrics-editor { flex:1; min-height:0; resize:none; border:1px solid #33383a; border-radius:10px; padding:16px; outline:none; background:#0e1112; color:#e8e2d6; font-size:15px; line-height:1.7; font-family:inherit; }
 .lyrics-editor:focus { border-color:#d9992e; }
 .lyrics-empty { align-self:center; margin:auto; max-width:340px; text-align:center; color:#7c817f; font-size:13px; line-height:1.7; }
