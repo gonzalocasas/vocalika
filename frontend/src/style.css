@@ -176,10 +176,15 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .chart-well { min-width:0; overflow:hidden; border-radius:12px; background:#0e1112; }
 .chart-well>p { margin:12px 16px 0; color:#7c817f; font:500 9px "IBM Plex Mono",monospace; letter-spacing:.12em; }
 .diagnostic-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px; }
-.listening-gate { display:grid; grid-template-columns:1fr auto; align-items:center; gap:18px; }
+.listening-gate { display:flex; flex-direction:column; gap:16px; }
+.listening-header { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap; }
+.listening-header>div:first-child { min-width:0; }
+.listening-header h2 { margin:0; }
 .listening-range { color:#93908a; font:500 9px "IBM Plex Mono",monospace; letter-spacing:.08em; }
 .listening-range input { width:70px; border:1px solid #33383a; border-radius:6px; padding:5px; background:#171a1b; color:#e8e2d6; font-family:inherit; }
-.transport-row { display:flex; flex-wrap:wrap; grid-column:1/-1; gap:8px; }
+.reset-zoom { margin-left:10px; border:1px solid #33383a; border-radius:6px; padding:5px 9px; background:#171a1b; color:#93908a; font:500 9px "IBM Plex Mono",monospace; letter-spacing:.08em; cursor:pointer; }
+.reset-zoom:hover { border-color:#f0e9dc; color:#e8e2d6; }
+.transport-row { display:flex; flex-wrap:wrap; gap:8px; }
 .transport-row button { border:1px solid #333839; border-radius:10px; padding:12px 16px; background:#171a1b; color:#e8e2d6; font:500 10px "IBM Plex Mono",monospace; }
 .transport-row button:hover { border-color:#f0e9dc; }
 .transport-row button.active { border-color:#d9992e; background:#d9992e; color:#17191a; }
@@ -213,5 +218,5 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .format-grid button { border:1px solid #33383a; border-radius:8px; padding:10px 3px; background:#1b1e20; color:#93908a; font:500 9px "IBM Plex Mono",monospace; }
 .format-grid button.active { border-color:#d9992e; background:#d9992e; color:#17191a; }
 .export-note { margin:15px 0 0; color:#7c817f; font-size:11px; line-height:1.5; }
-@media(max-width:900px){ main{width:min(100% - 28px,1180px)} .project-row{grid-template-columns:minmax(0,1fr) 120px 72px}.project-row .project-stat:last-child{display:none}.project-creator,.reference-layout,.takes-layout,.export-layout{grid-template-columns:1fr}.project-creator{gap:24px}.metric-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.diagnostic-grid{grid-template-columns:1fr}.compare-heading,.project-title-row{align-items:flex-start;flex-direction:column}.listening-gate{grid-template-columns:1fr}}
+@media(max-width:900px){ main{width:min(100% - 28px,1180px)} .project-row{grid-template-columns:minmax(0,1fr) 120px 72px}.project-row .project-stat:last-child{display:none}.project-creator,.reference-layout,.takes-layout,.export-layout{grid-template-columns:1fr}.project-creator{gap:24px}.metric-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.diagnostic-grid{grid-template-columns:1fr}.compare-heading,.project-title-row{align-items:flex-start;flex-direction:column}.listening-header{align-items:flex-start;flex-direction:column;gap:12px}}
 @media(max-width:620px){.top-bar{padding-inline:16px}.top-bar>div:first-child span{display:none}.projects-hero{align-items:flex-start;flex-direction:column}.projects-hero h1{font-size:52px}.project-row{grid-template-columns:minmax(0,1fr) 58px;gap:12px;padding:17px}.project-row .waveform-bars,.project-row .project-stat:last-child{display:none}.project-creator{min-width:0;padding:24px 18px}.header-stats{width:100%}.header-stats article{flex:1}.feature-heading,.compare-switches{align-items:flex-start;flex-direction:column}.take-row{grid-template-columns:minmax(0,1fr) 64px}.take-select{grid-template-columns:minmax(0,1fr) 58px;gap:10px;padding:17px 8px 17px 17px}.take-row .waveform-bars{display:none}.take-delete{margin-right:8px}.metric-strip{grid-template-columns:1fr 1fr}.alignment-strip{align-items:flex-start;flex-direction:column}.alignment-strip i{display:none}.listening-range{line-height:2.4}.export-track{grid-template-columns:minmax(0,1fr) 50px}.export-track .waveform-bars{display:none}.routing-options{grid-template-columns:1fr}.channel-side{align-items:flex-start;flex-direction:column}.export-actions{align-items:stretch;flex-direction:column}.export-actions button{width:100%}}

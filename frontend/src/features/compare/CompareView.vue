@@ -264,12 +264,51 @@ async function play(kind: "reference" | "mix" | "take"): Promise<void> {
   }, Math.max(.05, end - start) * 1000)
 }
 
+/**
+ * Frame the charts on a phrase.
+ *
+ * A little context either side keeps the phrase from sitting flush against
+ * the axes, which makes its approach and release readable.
+ */
+async function zoomPlotsTo(start: number, end: number): Promise<void> {
+  const margin = Math.max(0.25, (end - start) * 0.08)
+  const Plotly = await loadPlotly()
+  // `mirror` writes the selection back whenever a plot is relayed out. This
+  // relayout is the selection, so suppress that round trip rather than let it
+  // overwrite the exact phrase bounds with the padded view.
+  mirroring = true
+  try {
+    await Promise.all(
+      plotElements().map((plot) =>
+        Plotly.relayout(plot, { xaxis: { range: [Math.max(0, start - margin), end + margin] } }),
+      ),
+    )
+  } finally {
+    mirroring = false
+  }
+}
+
+async function resetZoom(): Promise<void> {
+  const Plotly = await loadPlotly()
+  mirroring = true
+  try {
+    // Only the view resets. The listening range is left alone so the phrase
+    // stays armed for playback while the charts show the whole take again.
+    await Promise.all(
+      plotElements().map((plot) => Plotly.relayout(plot, { xaxis: { autorange: true } })),
+    )
+  } finally {
+    mirroring = false
+  }
+}
+
 function selectPhrase(start: number, end: number): void {
   selectionStart.value = Number(start.toFixed(2))
   selectionEnd.value = Number(end.toFixed(2))
   // Looping is what turns "this phrase is wrong" into practice, so arm it
   // rather than making the singer reach for a second control.
   looping.value = true
+  void zoomPlotsTo(start, end)
 }
 
 async function playAB(): Promise<void> {
@@ -323,7 +362,12 @@ onBeforeUnmount(() => {
     </section>
 
     <section class="feature-panel listening-gate">
-      <div><p class="mono-eyebrow accent-text">LISTENING GATE</p><h2>Compare the same phrase</h2></div>
+      <div class="listening-header">
+        <div><p class="mono-eyebrow accent-text">LISTENING GATE</p><h2>Compare the same phrase</h2></div>
+        <div class="listening-range">FROM <input v-model.number="selectionStart" type="number" step=".1" /> / TO <input v-model.number="selectionEnd" type="number" step=".1" /> / LOOP {{ looping ? "ON" : "OFF" }}
+          <button type="button" class="reset-zoom" @click="resetZoom">FULL VIEW</button>
+        </div>
+      </div>
       <PitchHeatmapBand
         :frames="artifact.comparison.frames"
         :mode="comparisonMode"
@@ -331,7 +375,6 @@ onBeforeUnmount(() => {
         :selection-end="selectionEnd"
         @select="selectPhrase"
       />
-      <div class="listening-range">FROM <input v-model.number="selectionStart" type="number" step=".1" /> / TO <input v-model.number="selectionEnd" type="number" step=".1" /> / LOOP {{ looping ? "ON" : "OFF" }}</div>
       <div class="transport-row"><button :class="{ active: activePlayer === 'reference' }" @click="play('reference')">▶ REFERENCE VOCAL</button><button :class="{ active: activePlayer === 'mix' }" @click="play('mix')">▶ ORIGINAL MIX</button><button :class="{ active: activePlayer === 'take' }" @click="play('take')">▶ MY TAKE</button><button @click="playAB">A / B</button><button :class="{ active: looping }" @click="looping = !looping">LOOP</button><button @click="stopAudio">■ STOP</button></div>
       <audio ref="referenceAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?transpose=${take.reference_transpose_semitones ?? 0}`"></audio>
       <audio ref="mixAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/mix?transpose=${take.reference_transpose_semitones ?? 0}`"></audio>
