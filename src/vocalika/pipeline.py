@@ -186,6 +186,7 @@ def run_analysis(
         "confidence_threshold": config.pitch_confidence_threshold,
         "octave_window": config.octave_window_frames,
         "max_gap_seconds": config.max_pitch_gap_seconds,
+        "sustain_confidence_threshold": config.pitch_sustain_confidence_threshold,
     }
     progress("Extracting reference pitch")
     cached_reference_pitch = extract_clean_pitch(

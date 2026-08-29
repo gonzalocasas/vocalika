@@ -12,6 +12,9 @@ class AnalysisConfig:
     pitch_min_midi: float = 36.0
     pitch_max_midi: float = 84.0
     pitch_confidence_threshold: float = 0.55
+    # Frames continue an already-established note down to this confidence.
+    # See _sustained in analysis/cleaning.py.
+    pitch_sustain_confidence_threshold: float = 0.20
     pitch_harmonic_margin: float = 1.0
     octave_window_frames: int = 9
     max_pitch_gap_seconds: float = 0.08

@@ -526,6 +526,7 @@
     "pitch_hop_length": 256,
     "pitch_max_midi": 84.0,
     "pitch_min_midi": 36.0,
+    "pitch_sustain_confidence_threshold": 0.2,
     "stable_note_max_slope_cents_per_second": 60.0,
     "stable_note_max_span_cents": 120.0,
     "stable_note_maximum_alignment_duration_ratio": 2.5,
