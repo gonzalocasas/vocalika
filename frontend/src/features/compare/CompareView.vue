@@ -11,6 +11,7 @@ import {
 import { displayContour, rawContour } from "../../plotData"
 import { apiJson } from "../../shared/api"
 import type { AlignedWaveforms, AnalysisArtifact, Project, Take } from "../../shared/types"
+import PitchHeatmapBand from "./PitchHeatmapBand.vue"
 
 const props = defineProps<{ project: Project; take: Take; artifact: AnalysisArtifact }>()
 const emit = defineEmits<{ export: [] }>()
@@ -263,6 +264,14 @@ async function play(kind: "reference" | "mix" | "take"): Promise<void> {
   }, Math.max(.05, end - start) * 1000)
 }
 
+function selectPhrase(start: number, end: number): void {
+  selectionStart.value = Number(start.toFixed(2))
+  selectionEnd.value = Number(end.toFixed(2))
+  // Looping is what turns "this phrase is wrong" into practice, so arm it
+  // rather than making the singer reach for a second control.
+  looping.value = true
+}
+
 async function playAB(): Promise<void> {
   looping.value = false
   await play("reference")
@@ -315,6 +324,13 @@ onBeforeUnmount(() => {
 
     <section class="feature-panel listening-gate">
       <div><p class="mono-eyebrow accent-text">LISTENING GATE</p><h2>Compare the same phrase</h2></div>
+      <PitchHeatmapBand
+        :frames="artifact.comparison.frames"
+        :mode="comparisonMode"
+        :selection-start="selectionStart"
+        :selection-end="selectionEnd"
+        @select="selectPhrase"
+      />
       <div class="listening-range">FROM <input v-model.number="selectionStart" type="number" step=".1" /> / TO <input v-model.number="selectionEnd" type="number" step=".1" /> / LOOP {{ looping ? "ON" : "OFF" }}</div>
       <div class="transport-row"><button :class="{ active: activePlayer === 'reference' }" @click="play('reference')">▶ REFERENCE VOCAL</button><button :class="{ active: activePlayer === 'mix' }" @click="play('mix')">▶ ORIGINAL MIX</button><button :class="{ active: activePlayer === 'take' }" @click="play('take')">▶ MY TAKE</button><button @click="playAB">A / B</button><button :class="{ active: looping }" @click="looping = !looping">LOOP</button><button @click="stopAudio">■ STOP</button></div>
       <audio ref="referenceAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?transpose=${take.reference_transpose_semitones ?? 0}`"></audio>
