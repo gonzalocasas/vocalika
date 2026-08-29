@@ -34,6 +34,9 @@ const monitorTime = ref(0)
 let stopTimer: number | undefined
 
 const recording = computed(() => recorder.state.value === "recording")
+const paused = computed(() => recorder.state.value === "paused")
+// Paused is still mid-take: the reference is held, not finished.
+const inTake = computed(() => recording.value || paused.value)
 const lyricsFontSize = computed(() => `${FONT_STEPS[fontStep.value]}px`)
 
 function setFontStep(next: number): void {
@@ -81,6 +84,44 @@ function stopMonitor(): void {
   stopTimer = undefined
 }
 
+function referenceEnd(): number {
+  return props.project.trim_end_seconds ?? props.project.reference.duration_seconds
+}
+
+function playMonitor(): Promise<unknown> {
+  return Promise.all([
+    vocalAudio.value?.play(),
+    instrumentalAudio.value?.play(),
+  ].filter((promise): promise is Promise<void> => promise !== undefined))
+}
+
+/**
+ * Schedule the automatic stop from where the reference actually is.
+ *
+ * Deriving the deadline from the monitor's position rather than from a fixed
+ * duration set at the start is what lets a take be paused: the remaining time
+ * is recomputed on every resume instead of running down during the gap.
+ */
+function armStopTimer(): void {
+  if (stopTimer !== undefined) window.clearTimeout(stopTimer)
+  const clockSource = vocalAudio.value ?? instrumentalAudio.value
+  const position = clockSource?.currentTime ?? props.project.trim_start_seconds
+  stopTimer = window.setTimeout(stopRecording, Math.max(0.1, referenceEnd() - position) * 1000)
+}
+
+// Time comes from the monitor element, not the wall clock: the ribbon has to
+// stay locked to the backing track the singer is actually hearing, and a
+// paused monitor must hold the ribbon still.
+async function startLivePitch(): Promise<void> {
+  const clockSource = vocalAudio.value ?? instrumentalAudio.value
+  const stream = recorder.stream.value
+  if (!stream) return
+  await livePitch.start(stream, () => {
+    monitorTime.value = clockSource?.currentTime ?? 0
+    return monitorTime.value
+  })
+}
+
 async function startRecording(): Promise<void> {
   // Reading and editing are different modes; nobody wants a textarea in front
   // of them while singing.
@@ -89,7 +130,6 @@ async function startRecording(): Promise<void> {
   await recorder.start()
   if (recorder.state.value !== "recording") return
   const start = props.project.trim_start_seconds
-  const end = props.project.trim_end_seconds ?? props.project.reference.duration_seconds
   if (vocalAudio.value) {
     vocalAudio.value.currentTime = start
     vocalAudio.value.volume = voiceLevel.value / 100
@@ -98,22 +138,24 @@ async function startRecording(): Promise<void> {
     instrumentalAudio.value.currentTime = start
     instrumentalAudio.value.volume = 1
   }
-  await Promise.all([
-    vocalAudio.value?.play(),
-    instrumentalAudio.value?.play(),
-  ].filter((promise): promise is Promise<void> => promise !== undefined))
-  stopTimer = window.setTimeout(stopRecording, Math.max(0.1, end - start) * 1000)
+  await playMonitor()
+  armStopTimer()
+  await startLivePitch()
+}
 
-  // Time comes from the monitor element, not the wall clock: the ribbon has
-  // to stay locked to the backing track the singer is actually hearing.
-  const clockSource = vocalAudio.value ?? instrumentalAudio.value
-  const stream = recorder.stream.value
-  if (stream) {
-    await livePitch.start(stream, () => {
-      monitorTime.value = clockSource?.currentTime ?? 0
-      return monitorTime.value
-    })
-  }
+function pauseRecording(): void {
+  // The recorder and the reference have to stop together, or the take would
+  // resume misaligned against the contour it is scored on.
+  recorder.pause()
+  stopMonitor()
+  livePitch.stop()
+}
+
+async function resumeRecording(): Promise<void> {
+  await playMonitor()
+  recorder.resume()
+  armStopTimer()
+  await startLivePitch()
 }
 
 function stopRecording(): void {
@@ -127,8 +169,9 @@ function analyze(): void {
 }
 
 function requestClose(): void {
-  // Closing mid-take would otherwise discard the recording silently.
-  if (recording.value) {
+  // Closing mid-take would otherwise discard the recording silently. A paused
+  // take is still a take, so it has to be caught here too.
+  if (inTake.value) {
     stopRecording()
     return
   }
@@ -170,7 +213,7 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
 
 <template>
   <div class="recording-overlay" @click.self="requestClose">
-    <section class="recording-modal" :class="{ recording }" role="dialog" aria-modal="true">
+    <section class="recording-modal" :class="{ recording: inTake }" role="dialog" aria-modal="true">
       <header class="recording-modal-header">
         <div>
           <p class="mono-eyebrow accent-text">RECORD A TAKE</p>
@@ -180,7 +223,7 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
           <button
             type="button"
             class="tool-button"
-            :disabled="recording"
+            :disabled="inTake"
             @click="editingLyrics = !editingLyrics"
           >{{ editingLyrics ? "DONE" : "EDIT LYRICS" }}</button>
           <button type="button" class="tool-button" @click="setFontStep(fontStep - 1)">A−</button>
@@ -211,25 +254,29 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
             :samples="livePitch.samples.value"
             :current="livePitch.current.value"
             :time="monitorTime"
-            :active="recording"
+            :active="inTake"
           />
           <p class="live-cents" :class="{ live: recording }">
             <span v-if="liveCents === null">&mdash;</span>
             <span v-else>{{ liveCents > 0 ? "+" : "" }}{{ liveCents }}<small>cents</small></span>
           </p>
 
-          <div class="record-readout" :class="{ live: recording }">
-            <i></i><span>{{ recording ? "RECORDING" : "MIC READY" }}</span><strong>{{ timecode }}</strong>
+          <div class="record-readout" :class="{ live: recording, held: paused }">
+            <i></i><span>{{ recording ? "RECORDING" : paused ? "PAUSED" : "MIC READY" }}</span><strong>{{ timecode }}</strong>
           </div>
           <p v-if="recorder.error.value" class="inline-error">{{ recorder.error.value }}</p>
 
           <button
-            v-if="!recording && !recorder.recordedFile.value"
+            v-if="!inTake && !recorder.recordedFile.value"
             class="record-button"
             :disabled="!recorder.supported.value"
             @click="startRecording"
           >● START RECORDING</button>
-          <button v-else-if="recording" class="record-button live" @click="stopRecording">■ STOP</button>
+          <div v-else-if="inTake" class="take-transport">
+            <button v-if="recording" class="hold-button" @click="pauseRecording">❚❚ PAUSE</button>
+            <button v-else class="hold-button resume" @click="resumeRecording">▶ RESUME</button>
+            <button class="record-button live" @click="stopRecording">■ STOP</button>
+          </div>
 
           <template v-if="recorder.recordedFile.value">
             <audio class="recorded-preview" controls :src="recordedUrl"></audio>

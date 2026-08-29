@@ -143,6 +143,12 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .record-readout.live i { background:#c96f3e; box-shadow:0 0 0 4px rgba(201,111,62,.15); }
 .record-button { width:100%; background:#f0e9dc; color:#17191a; }
 .record-button.live { background:#c96f3e; color:#17191a; }
+.take-transport { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.hold-button { border:1px solid #33383a; border-radius:10px; padding:12px 10px; background:#1b1e20; color:#e8e2d6; font:500 10px "IBM Plex Mono",monospace; letter-spacing:.08em; cursor:pointer; }
+.hold-button:hover { border-color:#f0e9dc; }
+.hold-button.resume { border-color:#4f8d7b; color:#7fd3ba; }
+.take-transport .record-button { width:100%; }
+.record-readout.held i { background:#8a8f8d; box-shadow:0 0 0 4px rgba(138,143,141,.15); }
 .recorded-preview { display:block; width:100%; margin:12px 0; }
 .recording-controls .text-button { width:100%; margin-top:10px; }
 .inline-error { color:#d99a7b; font-size:11px; }

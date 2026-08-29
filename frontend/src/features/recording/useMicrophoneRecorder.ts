@@ -1,7 +1,9 @@
 import { computed, onBeforeUnmount, ref } from "vue"
 
+import { createElapsedClock } from "./elapsedClock"
+
 export function useMicrophoneRecorder() {
-  const state = ref<"idle" | "requesting" | "recording" | "ready" | "error">("idle")
+  const state = ref<"idle" | "requesting" | "recording" | "paused" | "ready" | "error">("idle")
   const elapsedSeconds = ref(0)
   const recordedFile = ref<File | null>(null)
   const error = ref("")
@@ -12,9 +14,24 @@ export function useMicrophoneRecorder() {
   let recorder: MediaRecorder | null = null
   let chunks: Blob[] = []
   let timer: number | undefined
-  let startedAt = 0
+  // Paused gaps are not in the recording, so elapsed time is accumulated per
+  // segment rather than measured from the start.
+  const clock = createElapsedClock()
 
   const supported = computed(() => typeof MediaRecorder !== "undefined")
+
+  function startTicking(): void {
+    timer = window.setInterval(() => {
+      elapsedSeconds.value = clock.read(performance.now())
+    }, 100)
+  }
+
+  function stopTicking(): void {
+    if (timer === undefined) return
+    window.clearInterval(timer)
+    timer = undefined
+    elapsedSeconds.value = clock.read(performance.now())
+  }
 
   function preferredMimeType(): string {
     const candidates = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm"]
@@ -56,11 +73,9 @@ export function useMicrophoneRecorder() {
         state.value = "ready"
       }, { once: true })
       recorder.start(250)
-      startedAt = performance.now()
+      clock.start(performance.now())
       elapsedSeconds.value = 0
-      timer = window.setInterval(() => {
-        elapsedSeconds.value = (performance.now() - startedAt) / 1000
-      }, 100)
+      startTicking()
       state.value = "recording"
     } catch (reason) {
       cleanupStream()
@@ -69,8 +84,25 @@ export function useMicrophoneRecorder() {
     }
   }
 
+  function pause(): void {
+    if (recorder?.state !== "recording") return
+    recorder.pause()
+    clock.pause(performance.now())
+    stopTicking()
+    state.value = "paused"
+  }
+
+  function resume(): void {
+    if (recorder?.state !== "paused") return
+    recorder.resume()
+    clock.resume(performance.now())
+    startTicking()
+    state.value = "recording"
+  }
+
   function stop(): void {
-    if (recorder?.state === "recording") recorder.stop()
+    // A paused recorder still holds the take, so it must be stoppable too.
+    if (recorder?.state === "recording" || recorder?.state === "paused") recorder.stop()
   }
 
   function discard(): void {
@@ -80,9 +112,12 @@ export function useMicrophoneRecorder() {
   }
 
   onBeforeUnmount(() => {
-    if (recorder?.state === "recording") recorder.stop()
+    if (recorder?.state === "recording" || recorder?.state === "paused") recorder.stop()
     cleanupStream()
   })
 
-  return { state, elapsedSeconds, recordedFile, error, supported, stream, start, stop, discard }
+  return {
+    state, elapsedSeconds, recordedFile, error, supported, stream,
+    start, pause, resume, stop, discard,
+  }
 }
