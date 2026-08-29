@@ -47,7 +47,7 @@ export function useProjects() {
 
   async function updateProject(
     projectId: string,
-    update: Partial<Pick<Project, "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones" | "lyrics">>,
+    update: Partial<Pick<Project, "title" | "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones" | "lyrics">>,
   ): Promise<Project> {
     const payload = await apiJson<{ project: Project }>(`/api/projects/${projectId}`, {
       method: "PATCH",

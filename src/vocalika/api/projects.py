@@ -26,6 +26,7 @@ from vocalika.projects.service import ProjectService
 
 
 class ProjectSettingsUpdate(BaseModel):
+    title: str | None = None
     trim_start_seconds: float | None = None
     trim_end_seconds: float | None = None
     transpose_semitones: int | None = None

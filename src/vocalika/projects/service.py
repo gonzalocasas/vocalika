@@ -107,6 +107,7 @@ class ProjectService:
         trim_end_seconds: float | None = None,
         transpose_semitones: int | None = None,
         lyrics: str | None = None,
+        title: str | None = None,
     ) -> Project:
         def apply(project: Project) -> Project:
             start = project.trim_start_seconds if trim_start_seconds is None else trim_start_seconds
@@ -119,8 +120,14 @@ class ProjectService:
                 if transpose_semitones is None
                 else max(-12, min(12, int(transpose_semitones)))
             )
+            # A project is found by its name in the list, so an empty or
+            # whitespace-only title would make it unidentifiable. Reject it by
+            # keeping the existing name rather than by failing the whole
+            # settings update.
+            renamed = project.title if title is None or not title.strip() else title.strip()
             return replace(
                 project,
+                title=renamed,
                 trim_start_seconds=start,
                 trim_end_seconds=end,
                 transpose_semitones=transpose,

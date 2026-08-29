@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
 import CompareView from "./features/compare/CompareView.vue"
 import ExportView from "./features/export/ExportView.vue"
@@ -91,8 +91,33 @@ async function handleCreate(input: NewProjectInput): Promise<void> {
   }
 }
 
+const renamingProject = ref(false)
+const renameDraft = ref("")
+const renameInput = ref<HTMLInputElement | null>(null)
+
+function beginRename(): void {
+  if (!selectedProject.value) return
+  renameDraft.value = selectedProject.value.title
+  renamingProject.value = true
+  // The field is created by this same change, so focus has to wait for it.
+  void nextTick(() => {
+    renameInput.value?.focus()
+    renameInput.value?.select()
+  })
+}
+
+async function commitRename(): Promise<void> {
+  if (!renamingProject.value) return
+  renamingProject.value = false
+  const next = renameDraft.value.trim()
+  // An unchanged or emptied name is a no-op rather than a write; the server
+  // also refuses a blank title, but there is no reason to ask it.
+  if (!next || next === selectedProject.value?.title) return
+  await handleUpdate({ title: next })
+}
+
 async function handleUpdate(
-  settings: Partial<Pick<Project, "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones" | "lyrics">>,
+  settings: Partial<Pick<Project, "title" | "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones" | "lyrics">>,
 ): Promise<void> {
   if (selectedProject.value) await updateProject(selectedProject.value.id, settings)
 }
@@ -235,7 +260,25 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
           <button class="back-button" @click="closeProject">← ALL PROJECTS</button>
           <div class="project-title-row">
             <div>
-              <h1>{{ selectedProject.title }}</h1>
+              <h1 v-if="!renamingProject" class="editable-title" @click="beginRename">
+                {{ selectedProject.title }}<button
+                  type="button"
+                  class="rename-hint"
+                  title="Rename this project"
+                  @click.stop="beginRename"
+                >EDIT</button>
+              </h1>
+              <input
+                v-else
+                ref="renameInput"
+                v-model="renameDraft"
+                class="title-input"
+                type="text"
+                :placeholder="selectedProject.title"
+                @keydown.enter="commitRename"
+                @keydown.esc="renamingProject = false"
+                @blur="commitRename"
+              />
               <p>
                 {{ selectedProject.reference.title }} <i>/</i>
                 {{ Math.round(selectedProject.reference.duration_seconds / 60) }} MIN <i>/</i>

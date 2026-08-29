@@ -199,3 +199,70 @@ async def test_analyzed_take_playback_prefers_normalized_audio(tmp_path: Path) -
     assert vocal.content == b"normalized-wav"
     assert raw.status_code == 200
     assert raw.content == b"raw-webm"
+
+
+@pytest.mark.anyio
+async def test_a_project_can_be_renamed_and_the_new_name_persists(tmp_path: Path) -> None:
+    reference_bytes = _wav_bytes(tmp_path / "reference.wav")
+    projects = tmp_path / "projects"
+    app = create_app(None, projects_directory=projects, library_directory=tmp_path / "analyses")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        created = await client.post(
+            "/api/projects",
+            data={"title": "Working title", "reference_is_vocal": "true"},
+            files={"reference_file": ("reference.wav", reference_bytes, "audio/wav")},
+        )
+        project_id = created.json()["project"]["id"]
+
+        renamed = await client.patch(
+            f"/api/projects/{project_id}",
+            json={"title": "  Plegaria para un niño dormido  "},
+        )
+        assert renamed.status_code == 200
+        # Surrounding whitespace is trimmed so the list does not show a name
+        # that looks indented.
+        assert renamed.json()["project"]["title"] == "Plegaria para un niño dormido"
+
+        # Renaming must not disturb the settings it was not asked to change.
+        assert renamed.json()["project"]["reference"]["duration_seconds"] > 0
+
+    reloaded = create_app(None, projects_directory=projects, library_directory=tmp_path / "analyses")
+    async with AsyncClient(transport=ASGITransport(app=reloaded), base_url="http://test") as client:
+        listed = await client.get("/api/projects")
+        assert [p["title"] for p in listed.json()["projects"]] == [
+            "Plegaria para un niño dormido"
+        ]
+
+
+@pytest.mark.anyio
+async def test_a_blank_rename_keeps_the_existing_name(tmp_path: Path) -> None:
+    """A project is found by name, so it must never become nameless."""
+    reference_bytes = _wav_bytes(tmp_path / "reference.wav")
+    app = create_app(
+        None,
+        projects_directory=tmp_path / "projects",
+        library_directory=tmp_path / "analyses",
+    )
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        created = await client.post(
+            "/api/projects",
+            data={"title": "Keeps its name", "reference_is_vocal": "true"},
+            files={"reference_file": ("reference.wav", reference_bytes, "audio/wav")},
+        )
+        project_id = created.json()["project"]["id"]
+
+        for blank in ("", "   ", "\n\t"):
+            response = await client.patch(
+                f"/api/projects/{project_id}", json={"title": blank}
+            )
+            assert response.status_code == 200
+            assert response.json()["project"]["title"] == "Keeps its name"
+
+        # Omitting the field entirely must also leave the name alone.
+        untouched = await client.patch(
+            f"/api/projects/{project_id}", json={"transpose_semitones": 2}
+        )
+        assert untouched.json()["project"]["title"] == "Keeps its name"
+        assert untouched.json()["project"]["transpose_semitones"] == 2

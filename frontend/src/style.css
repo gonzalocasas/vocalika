@@ -81,6 +81,11 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .header-stats article { min-width:102px; border:1px solid #33383a; border-radius:11px; padding:12px 15px; background:#212527; }
 .header-stats span { display:block; color:#7c817f; font:500 9px "IBM Plex Mono",monospace; letter-spacing:.14em; }
 .header-stats strong { display:block; margin-top:5px; color:#d9992e; font:500 20px "IBM Plex Mono",monospace; }
+.editable-title { display:inline-flex; align-items:center; gap:12px; cursor:text; }
+.rename-hint { border:1px solid #33383a; border-radius:7px; padding:5px 9px; background:#1b1e20; color:#6d716f; font:500 9px "IBM Plex Mono",monospace; letter-spacing:.1em; cursor:pointer; opacity:0; transition:opacity .15s,color .15s; }
+.editable-title:hover .rename-hint { opacity:1; }
+.rename-hint:hover { border-color:#f0e9dc; color:#e8e2d6; }
+.title-input { width:100%; max-width:620px; margin:0 0 8px; border:1px solid #d9992e; border-radius:10px; padding:2px 10px; outline:none; background:#0e1112; color:#e8e2d6; font:600 44px "Space Grotesk",system-ui,sans-serif; }
 .project-tabs { display:flex; overflow-x:auto; margin-top:28px; border-bottom:1px solid #33383a; }
 .project-tabs button { flex:0 0 auto; margin-bottom:-1px; border:1px solid transparent; border-radius:10px 10px 0 0; padding:14px 20px; background:transparent; color:#93908a; font:500 11px "IBM Plex Mono",monospace; letter-spacing:.1em; }
 .project-tabs button span { margin-right:8px; opacity:.55; }
