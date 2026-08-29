@@ -100,7 +100,9 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .monitor-level { margin-top:18px; border:1px solid #33383a; border-radius:11px; padding:13px 15px; background:#1b1e20; }
 .monitor-level label { display:flex; justify-content:space-between; font:500 10px "IBM Plex Mono",monospace; letter-spacing:.08em; }
 .monitor-level small,.feature-note { color:#7c817f; font-size:11px; line-height:1.5; }
-.reference-transport { display:flex; align-items:center; justify-content:space-between; margin-top:18px; color:#93908a; font:500 10px "IBM Plex Mono",monospace; }
+.reference-transport { display:flex; align-items:center; gap:10px; margin-top:18px; color:#93908a; font:500 10px "IBM Plex Mono",monospace; }
+/* The timecode keeps the right edge; the buttons group together on the left. */
+.reference-transport>span { margin-left:auto; }
 .feature-sidebar { display:grid; align-content:start; gap:14px; }
 .compact-panel { padding:21px; }
 .transpose-value { margin:10px 0 16px; font:500 38px "IBM Plex Mono",monospace; }
