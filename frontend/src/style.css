@@ -137,6 +137,10 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .lyrics-field small,.monitor-slider small { color:#7c817f; font-size:10px; }
 .monitor-slider { display:grid; gap:7px; margin:15px 0; }
 .monitor-slider>span { display:flex; justify-content:space-between; }
+.pitch-ribbon { margin:14px 0 6px; border:1px solid #33383a; }
+.live-cents { margin:0 0 4px; text-align:center; font:600 22px "IBM Plex Mono",monospace; color:#4a4f4d; letter-spacing:.04em; transition:color .2s; }
+.live-cents.live { color:#e8e2d6; }
+.live-cents small { font-size:10px; margin-left:5px; letter-spacing:.12em; opacity:.55; }
 .record-readout { display:grid; grid-template-columns:8px 1fr auto; align-items:center; gap:8px; margin:16px 0 10px; border:1px solid #33383a; border-radius:9px; padding:10px 12px; background:#0e1112; color:#7c817f; font:500 9px "IBM Plex Mono",monospace; letter-spacing:.1em; }
 .record-readout i { width:7px; height:7px; border-radius:50%; background:#4f8d7b; }
 .record-readout strong { color:#e8e2d6; font-size:12px; }

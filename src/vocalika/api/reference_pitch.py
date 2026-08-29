@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+
+from vocalika import __version__
+from vocalika.analysis.pitch import PyinPitchExtractor
+from vocalika.analysis.pitch_cache import extract_clean_pitch
+from vocalika.audio.decode import hash_file
+from vocalika.cache.manager import CacheManager
+from vocalika.config import AnalysisConfig
+from vocalika.projects.models import Project
+from vocalika.projects.reference_audio import ReferenceAudioService
+
+
+def build_reference_pitch(
+    project: Project,
+    reference_audio: ReferenceAudioService,
+    cache: CacheManager,
+    transpose_semitones: int,
+    *,
+    config: AnalysisConfig | None = None,
+) -> dict[str, list[float | None]]:
+    """Return the reference vocal's pitch contour for live comparison.
+
+    The recording screen needs this before any take exists, so it cannot be
+    read out of an analysis artifact. It goes through the same cached
+    extractor the pipeline uses, so the first call pays for pyin and every
+    later one -- including the pipeline's own, when a take is finally
+    analysed -- is a cache read.
+
+    Unvoiced frames are returned as null rather than dropped, so the client
+    breaks the line at a rest instead of interpolating across it.
+    """
+    config = config or AnalysisConfig()
+    vocal_path = Path(reference_audio.resolve(project, "vocal", transpose_semitones))
+    extractor = PyinPitchExtractor(
+        hop_length=config.pitch_hop_length,
+        frame_length=config.pitch_frame_length,
+        fmin_midi=config.pitch_min_midi,
+        fmax_midi=config.pitch_max_midi,
+        concert_pitch_hz=config.concert_pitch_hz,
+        harmonic_margin=config.pitch_harmonic_margin,
+    )
+    cached = extract_clean_pitch(
+        audio_path=vocal_path,
+        content_hash=hash_file(vocal_path),
+        cache=cache,
+        extractor=extractor,
+        cleaning_parameters={
+            "confidence_threshold": config.pitch_confidence_threshold,
+            "octave_window": config.octave_window_frames,
+            "max_gap_seconds": config.max_pitch_gap_seconds,
+            "sustain_confidence_threshold": config.pitch_sustain_confidence_threshold,
+        },
+        pipeline_version=__version__,
+    )
+    track = cached.track
+    midi = np.asarray(track.midi, dtype=np.float64)
+    return {
+        "times": [round(float(value), 4) for value in track.times],
+        "midi": [None if not np.isfinite(value) else round(float(value), 3) for value in midi],
+    }

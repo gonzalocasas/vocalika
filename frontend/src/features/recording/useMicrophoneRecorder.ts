@@ -5,8 +5,11 @@ export function useMicrophoneRecorder() {
   const elapsedSeconds = ref(0)
   const recordedFile = ref<File | null>(null)
   const error = ref("")
+  // Exposed so the live pitch display analyses exactly the stream being
+  // recorded, rather than opening a second one that could differ in gain or
+  // device.
+  const stream = ref<MediaStream | null>(null)
   let recorder: MediaRecorder | null = null
-  let stream: MediaStream | null = null
   let chunks: Blob[] = []
   let timer: number | undefined
   let startedAt = 0
@@ -19,8 +22,8 @@ export function useMicrophoneRecorder() {
   }
 
   function cleanupStream(): void {
-    stream?.getTracks().forEach((track) => track.stop())
-    stream = null
+    stream.value?.getTracks().forEach((track) => track.stop())
+    stream.value = null
     if (timer !== undefined) window.clearInterval(timer)
     timer = undefined
   }
@@ -35,11 +38,11 @@ export function useMicrophoneRecorder() {
     error.value = ""
     recordedFile.value = null
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      stream.value = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       })
       const mimeType = preferredMimeType()
-      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      recorder = new MediaRecorder(stream.value, mimeType ? { mimeType } : undefined)
       chunks = []
       recorder.addEventListener("dataavailable", (event) => {
         if (event.data.size > 0) chunks.push(event.data)
@@ -81,5 +84,5 @@ export function useMicrophoneRecorder() {
     cleanupStream()
   })
 
-  return { state, elapsedSeconds, recordedFile, error, supported, start, stop, discard }
+  return { state, elapsedSeconds, recordedFile, error, supported, stream, start, stop, discard }
 }

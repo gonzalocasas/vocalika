@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
+from vocalika.api.reference_pitch import build_reference_pitch
 from vocalika.api.uploads import safe_upload_name, save_upload
 from vocalika.api.waveform import build_aligned_waveforms, build_waveform_envelope
 from vocalika.audio.sources import LocalAudioSource
@@ -237,6 +238,27 @@ def create_projects_router(service: ProjectService) -> APIRouter:
             Path(value),
             reference.duration_seconds,
         )
+
+    @router.get("/{project_id}/reference/pitch")
+    async def reference_pitch(
+        project_id: str,
+        transpose: int = 0,
+    ) -> dict[str, list[float | None]]:
+        """Reference contour for the recording screen's live pitch display."""
+        try:
+            project = service.repository.load(project_id)
+        except ProjectNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        try:
+            return await run_in_threadpool(
+                build_reference_pitch,
+                project,
+                reference_audio_service,
+                service.cache,
+                transpose,
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     @router.get("/{project_id}/takes/{take_id}/audio/{kind}", response_class=FileResponse)
     def take_audio(
