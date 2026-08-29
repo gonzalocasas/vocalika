@@ -14,7 +14,9 @@ const vocalLevel = ref(70)
 const trimStart = ref(props.project.trim_start_seconds)
 const trimEnd = ref(props.project.trim_end_seconds ?? props.project.reference.duration_seconds)
 const transpose = ref(props.project.transpose_semitones)
-const playing = ref(false)
+const playbackState = ref<"stopped" | "playing" | "paused">("stopped")
+const playing = computed(() => playbackState.value === "playing")
+const paused = computed(() => playbackState.value === "paused")
 const playhead = ref(trimStart.value)
 const amplitudes = ref<number[]>([])
 const vocalAudio = ref<HTMLAudioElement | null>(null)
@@ -56,12 +58,25 @@ function configureVolumes(): void {
   }
 }
 
-function stop(): void {
+function holdTransport(): void {
   vocalAudio.value?.pause()
   instrumentalAudio.value?.pause()
-  playing.value = false
   if (animationFrame !== undefined) cancelAnimationFrame(animationFrame)
   animationFrame = undefined
+}
+
+/** Hold position so playback can pick up where it left off. */
+function pausePlayback(): void {
+  if (!playing.value) return
+  holdTransport()
+  playbackState.value = "paused"
+}
+
+/** Full stop: the playhead returns to the start of the trimmed range. */
+function stop(): void {
+  holdTransport()
+  playbackState.value = "stopped"
+  playhead.value = trimStart.value
 }
 
 function updatePlayhead(): void {
@@ -69,27 +84,33 @@ function updatePlayhead(): void {
   playhead.value = active?.currentTime ?? trimStart.value
   if (playhead.value >= trimEnd.value) {
     stop()
-    playhead.value = trimStart.value
     return
   }
   animationFrame = requestAnimationFrame(updatePlayhead)
 }
 
-async function play(): Promise<void> {
-  if (playing.value) {
-    stop()
-    return
-  }
+async function startAudio(from: number): Promise<void> {
   configureVolumes()
   for (const audio of [vocalAudio.value, instrumentalAudio.value]) {
-    if (audio) audio.currentTime = trimStart.value
+    if (audio) audio.currentTime = from
   }
   const promises: Promise<void>[] = []
   if (stem.value !== "instrumental" && vocalAudio.value) promises.push(vocalAudio.value.play())
   if (stem.value !== "vocal" && instrumentalAudio.value) promises.push(instrumentalAudio.value.play())
   await Promise.all(promises)
-  playing.value = true
+  playbackState.value = "playing"
   updatePlayhead()
+}
+
+async function play(): Promise<void> {
+  if (playing.value) {
+    pausePlayback()
+    return
+  }
+  // Resuming keeps the playhead; the trim range may have been dragged past it
+  // in the meantime, so a position outside the range restarts instead.
+  const inRange = playhead.value > trimStart.value && playhead.value < trimEnd.value
+  await startAudio(paused.value && inRange ? playhead.value : trimStart.value)
 }
 
 function clampTrim(changed: "start" | "end"): void {
@@ -164,7 +185,10 @@ onBeforeUnmount(stop)
       </div>
 
       <div class="reference-transport">
-        <button class="solid-button compact" @click="play">{{ playing ? "■ STOP" : "▶ PLAY" }}</button>
+        <button class="solid-button compact" @click="play">
+          {{ playing ? "❚❚ PAUSE" : paused ? "▶ RESUME" : "▶ PLAY" }}
+        </button>
+        <button v-if="playing || paused" class="ghost-button compact" @click="stop">■ STOP</button>
         <span>{{ formatTime(playhead) }} / {{ formatTime(duration) }}</span>
       </div>
       <audio ref="vocalAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${transpose}`"></audio>
