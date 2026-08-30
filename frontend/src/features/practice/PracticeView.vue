@@ -50,6 +50,8 @@ const pending = ref<{
   kind: "sustained" | "interval" | "warmup"
   target: number
   to?: number
+  prompt: string
+  seconds: number
 } | null>(null)
 
 function hearSustained(exercise: SustainedExercise): void {
@@ -69,7 +71,12 @@ function hearWarmup(): void {
 }
 
 async function trySustained(exercise: SustainedExercise): Promise<void> {
-  pending.value = { kind: "sustained", target: exercise.midi }
+  pending.value = {
+    kind: "sustained",
+    target: exercise.midi,
+    prompt: `Hold ${exercise.note}`,
+    seconds: exercise.hold_seconds,
+  }
   // Hear it first, then record: matching a pitch from memory is a different
   // and much harder skill than matching one you have just been given.
   await tone.playNote(exercise.midi, 1.4)
@@ -77,13 +84,26 @@ async function trySustained(exercise: SustainedExercise): Promise<void> {
 }
 
 async function tryInterval(exercise: IntervalExercise): Promise<void> {
-  pending.value = { kind: "interval", target: exercise.from_midi, to: exercise.to_midi }
+  pending.value = {
+    kind: "interval",
+    target: exercise.from_midi,
+    to: exercise.to_midi,
+    // Say both halves explicitly: the leap is the exercise, and it is not
+    // obvious from a card that both notes are meant to be sung.
+    prompt: `Sing ${exercise.from_note}, then leap ${exercise.direction} to ${exercise.to_note}`,
+    seconds: 2.6,
+  }
   await tone.playSequence([{ midi: exercise.from_midi, seconds: 1.0 }])
   window.setTimeout(() => void attempt.record(exercise.id, 2.6), 1200)
 }
 
 async function tryWarmupStep(midi: number, index: number): Promise<void> {
-  pending.value = { kind: "warmup", target: midi }
+  pending.value = {
+    kind: "warmup",
+    target: midi,
+    prompt: `Hold ${plan.value?.warmup?.steps_note[index] ?? ""}`,
+    seconds: 2.0,
+  }
   await tone.playNote(midi, 1.2)
   window.setTimeout(() => void attempt.record(`warmup-${index}`, 2.0), 1400)
 }
@@ -98,6 +118,25 @@ function centsLabel(cents: number | null): string {
 }
 
 const currentScore = computed<AttemptScore | null>(() => attempt.score.value)
+
+const dockVisible = computed(
+  () =>
+    attempt.recorder.state.value === "recording"
+    || attempt.scoring.value
+    || currentScore.value !== null,
+)
+const dockClass = computed(() =>
+  attempt.recorder.state.value === "recording"
+    ? "listening"
+    : currentScore.value
+      ? verdictClass(currentScore.value.verdict)
+      : "",
+)
+const countdown = computed(() => {
+  const total = pending.value?.seconds ?? 0
+  const left = Math.max(0, total + 0.6 - attempt.recorder.elapsedSeconds.value)
+  return `${left.toFixed(1)}s`
+})
 </script>
 
 <template>
@@ -118,46 +157,14 @@ const currentScore = computed<AttemptScore | null>(() => attempt.score.value)
 
     <template v-else-if="plan">
       <p v-if="attempt.error.value" class="inline-error">{{ attempt.error.value }}</p>
-      <div v-if="attempt.recorder.state.value === 'recording'" class="practice-live">
-        ● LISTENING — sing now
-        <button class="ghost-button compact" @click="attempt.finish">DONE</button>
-      </div>
-      <p v-else-if="attempt.scoring.value" class="feature-note">Measuring that attempt…</p>
-
-      <div v-if="currentScore" class="attempt-score" :class="verdictClass(currentScore.verdict)">
-        <template v-if="isIntervalScore(currentScore)">
-          <strong>{{ VERDICT_LABEL[currentScore.verdict] ?? currentScore.verdict }}</strong>
-          <span v-if="currentScore.interval_error_cents !== null">
-            You sang {{ currentScore.sung_semitones?.toFixed(1) }} semitones,
-            the leap is {{ currentScore.target_semitones }} —
-            {{ centsLabel(currentScore.interval_error_cents) }}
-          </span>
-          <small v-if="currentScore.first">
-            Starting note {{ centsLabel(currentScore.first.centre_cents) }} ·
-            landing note {{ centsLabel(currentScore.second?.centre_cents ?? null) }}
-          </small>
-        </template>
-        <template v-else>
-          <strong>{{ VERDICT_LABEL[currentScore.verdict] ?? currentScore.verdict }}</strong>
-          <span>
-            Target {{ currentScore.target_note }} ·
-            you sang {{ currentScore.sung_note ?? "—" }} ·
-            {{ centsLabel(currentScore.centre_cents) }}
-          </span>
-          <small v-if="currentScore.steadiness_cents !== null">
-            Held {{ currentScore.held_seconds.toFixed(1) }}s ·
-            wandered ±{{ Math.round(currentScore.steadiness_cents) }}¢ around your own centre
-          </small>
-        </template>
-        <button class="text-button" @click="attempt.reset">CLEAR</button>
-      </div>
 
       <section v-if="plan.warmup" class="feature-panel practice-panel">
         <p class="mono-eyebrow accent-text">01 · WARM UP THE RANGE</p>
         <h3>Walk from the middle to the edges</h3>
         <p class="feature-note">
           Built outward from the comfortable middle rather than upward from the
-          bottom, so the voice is warm before it reaches the extremes.
+          bottom, so the voice is warm before it reaches the extremes. Tap a
+          note to hear it and sing it back.
         </p>
         <div class="warmup-ladder">
           <button
@@ -174,6 +181,11 @@ const currentScore = computed<AttemptScore | null>(() => attempt.score.value)
       <section v-if="plan.sustained.length" class="feature-panel practice-panel">
         <p class="mono-eyebrow accent-text">02 · HOLD THE LONG NOTES</p>
         <h3>The notes this song asks you to sustain</h3>
+        <p class="feature-note">
+          <b>TRY</b> plays the note, then listens. Sing it back and hold it
+          steady for the whole count — the start and end are trimmed off, so
+          easing into the note costs you nothing.
+        </p>
         <div class="exercise-grid">
           <article
             v-for="exercise in plan.sustained"
@@ -193,9 +205,19 @@ const currentScore = computed<AttemptScore | null>(() => attempt.score.value)
       <section v-if="plan.intervals.length" class="feature-panel practice-panel">
         <p class="mono-eyebrow accent-text">03 · THE LEAPS IN THIS SONG</p>
         <h3>Commit to the distance</h3>
+        <ol class="how-to">
+          <li><b>HEAR</b> plays the two notes so you know the leap.</li>
+          <li><b>TRY</b> plays only the <em>first</em> note.</li>
+          <li>
+            Sing that first note, hold it a moment, then jump straight to the
+            second. Sing them both, back to back, in one breath — no sliding
+            between them.
+          </li>
+        </ol>
         <p class="feature-note">
-          Widest first — these are the ones that go wrong. Your starting note is
-          played, then you sing both.
+          Widest leaps first: those are the ones that go wrong. The jump is
+          scored separately from the two notes, so landing the leap while
+          sitting a little low still counts as a good leap.
         </p>
         <div class="exercise-grid">
           <article
@@ -213,5 +235,49 @@ const currentScore = computed<AttemptScore | null>(() => attempt.score.value)
         </div>
       </section>
     </template>
+
+    <!-- Fixed, because the exercise being worked on may be far down the page
+         and feedback that has scrolled out of view is feedback nobody reads. -->
+    <div v-if="dockVisible" class="practice-dock" :class="dockClass">
+      <template v-if="attempt.recorder.state.value === 'recording'">
+        <div class="dock-main">
+          <span class="dock-pulse"></span>
+          <strong>{{ pending?.prompt ?? "Sing now" }}</strong>
+        </div>
+        <span class="dock-meta">{{ countdown }}</span>
+        <button class="ghost-button compact" @click="attempt.finish">DONE</button>
+      </template>
+
+      <template v-else-if="attempt.scoring.value">
+        <div class="dock-main"><strong>Measuring…</strong></div>
+      </template>
+
+      <template v-else-if="currentScore">
+        <div class="dock-main">
+          <strong>{{ VERDICT_LABEL[currentScore.verdict] ?? currentScore.verdict }}</strong>
+          <template v-if="isIntervalScore(currentScore)">
+            <span v-if="currentScore.interval_error_cents !== null">
+              you sang {{ currentScore.sung_semitones?.toFixed(1) }} semitones against
+              {{ currentScore.target_semitones }} — {{ centsLabel(currentScore.interval_error_cents) }}
+            </span>
+            <small v-if="currentScore.first">
+              first note {{ centsLabel(currentScore.first.centre_cents) }} ·
+              landing {{ centsLabel(currentScore.second?.centre_cents ?? null) }}
+            </small>
+          </template>
+          <template v-else>
+            <span>
+              target {{ currentScore.target_note }} · you sang
+              {{ currentScore.sung_note ?? "—" }} · {{ centsLabel(currentScore.centre_cents) }}
+            </span>
+            <small v-if="currentScore.steadiness_cents !== null">
+              held {{ currentScore.held_seconds.toFixed(1) }}s · wandered
+              ±{{ Math.round(currentScore.steadiness_cents) }}¢ around your own centre
+            </small>
+          </template>
+        </div>
+        <button class="text-button" @click="attempt.reset">DISMISS</button>
+      </template>
+    </div>
   </section>
 </template>

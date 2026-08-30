@@ -205,12 +205,28 @@ body.modal-open { overflow:hidden; }
 }
 
 /* --- practice --------------------------------------------------------- */
-.practice-view { display:grid; gap:18px; }
+.practice-view { display:grid; gap:18px; padding-bottom:96px; }
 .practice-panel { display:grid; gap:10px; }
 .practice-panel h3 { margin:0; font-size:19px; }
 .practice-range { margin:0; color:#d9992e; font:600 20px "IBM Plex Mono",monospace; text-align:right; }
 .practice-range small { display:block; color:#7c817f; font:500 9px "IBM Plex Mono",monospace; letter-spacing:.1em; }
-.practice-live { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid #c96f3e; border-radius:11px; padding:13px 16px; background:rgba(201,111,62,.12); color:#e8b58f; font:600 11px "IBM Plex Mono",monospace; letter-spacing:.1em; }
+.how-to { margin:0; padding-left:20px; color:#c9c4ba; font-size:13px; line-height:1.75; }
+.how-to b { color:#e8e2d6; font:600 10px "IBM Plex Mono",monospace; letter-spacing:.08em; }
+.how-to em { color:#d9992e; font-style:normal; }
+/* Fixed, not sticky: the exercise being worked on may be far down the page,
+   and feedback that scrolls out of view is feedback nobody reads. */
+.practice-dock { position:fixed; z-index:40; right:24px; bottom:20px; left:24px; display:flex; align-items:center; gap:16px; margin:0 auto; max-width:1180px; border:1px solid #3a4042; border-left-width:4px; border-radius:14px; padding:14px 20px; background:#1b1e20; box-shadow:0 16px 40px rgba(0,0,0,.5); }
+.practice-dock .dock-main { display:grid; gap:2px; flex:1; min-width:0; }
+.practice-dock strong { font:600 16px "Space Grotesk",system-ui,sans-serif; }
+.practice-dock span { color:#c9c4ba; font-size:12.5px; }
+.practice-dock small { color:#7c817f; font-size:11px; }
+.practice-dock.listening { border-color:#c96f3e; border-left-color:#c96f3e; background:#241d1a; }
+.practice-dock.listening strong { color:#e8b58f; }
+.practice-dock.listening .dock-main { display:flex; align-items:center; gap:10px; }
+.dock-meta { color:#e8b58f; font:600 17px "IBM Plex Mono",monospace; }
+.dock-pulse { width:9px; height:9px; border-radius:50%; background:#c96f3e; box-shadow:0 0 0 5px rgba(201,111,62,.18); animation:dock-pulse 1s ease-in-out infinite; }
+@keyframes dock-pulse { 50% { opacity:.35; } }
+
 .warmup-ladder { display:flex; flex-wrap:wrap; gap:8px; }
 .ladder-step { border:1px solid #33383a; border-radius:10px; padding:13px 15px; background:#1b1e20; color:#e8e2d6; font:600 13px "IBM Plex Mono",monospace; cursor:pointer; }
 .ladder-step:hover { border-color:#d9992e; }
