@@ -244,7 +244,7 @@ def create_projects_router(service: ProjectService) -> APIRouter:
     async def reference_pitch(
         project_id: str,
         transpose: int = 0,
-    ) -> dict[str, list[float | None]]:
+    ) -> dict[str, Any]:
         """Reference contour for the recording screen's live pitch display."""
         try:
             project = service.repository.load(project_id)

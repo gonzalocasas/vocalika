@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
+import { apiJson } from "./shared/api"
+import { transposedRange, type VocalRange } from "./shared/notes"
+
 import CompareView from "./features/compare/CompareView.vue"
 import ExportView from "./features/export/ExportView.vue"
 import ProjectsView from "./features/projects/ProjectsView.vue"
@@ -90,6 +93,34 @@ async function handleCreate(input: NewProjectInput): Promise<void> {
     // useProjects exposes the user-facing error.
   }
 }
+
+const referenceRange = ref<VocalRange | null>(null)
+
+/**
+ * The reference's range, measured once in its original key.
+ *
+ * Transposition shifts it arithmetically, so the control can be dragged
+ * without re-measuring -- which would mean rendering transposed audio and
+ * running pyin again for every semitone.
+ */
+async function loadReferenceRange(): Promise<void> {
+  referenceRange.value = null
+  const project = selectedProject.value
+  if (!project) return
+  try {
+    const payload = await apiJson<{ range: VocalRange | null }>(
+      `/api/projects/${project.id}/reference/pitch`,
+    )
+    referenceRange.value = payload.range
+  } catch {
+    // The range is informational; the rest of the screen works without it.
+    referenceRange.value = null
+  }
+}
+
+const sungRange = computed(() =>
+  transposedRange(referenceRange.value, selectedProject.value?.transpose_semitones ?? 0),
+)
 
 const renamingProject = ref(false)
 const renameDraft = ref("")
@@ -230,6 +261,8 @@ function handlePopState(): void {
   applyRoute(parseAppRoute(window.location.pathname))
 }
 
+// Only the identity matters: a rename or a trim change must not re-measure.
+watch(() => selectedProjectId.value, () => void loadReferenceRange(), { immediate: true })
 watch([loaded, selectedProject, activeTab, selectedTakeId], () => void reconcileRoute(), {
   immediate: true,
 })
@@ -282,6 +315,10 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
               <p>
                 {{ selectedProject.reference.title }} <i>/</i>
                 {{ Math.round(selectedProject.reference.duration_seconds / 60) }} MIN <i>/</i>
+                <template v-if="sungRange">
+                  <b class="range-badge">{{ sungRange.low_note }}–{{ sungRange.high_note }}</b>
+                  <i>/</i>
+                </template>
                 {{ selectedProject.reference.separation_model ? "STEMS READY" : "VOCAL SOURCE" }}
               </p>
             </div>

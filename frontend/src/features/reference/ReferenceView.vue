@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 
 import { apiJson } from "../../shared/api"
+import { transposedRange, type VocalRange } from "../../shared/notes"
 import { seekTimeAt } from "./seek"
 import type { Project, WaveformEnvelope } from "../../shared/types"
 
@@ -24,6 +25,23 @@ const vocalAudio = ref<HTMLAudioElement | null>(null)
 const instrumentalAudio = ref<HTMLAudioElement | null>(null)
 let animationFrame: number | undefined
 let scrubbing = false
+
+const referenceRange = ref<VocalRange | null>(null)
+// Transposition shifts every pitch equally, so the displayed range follows the
+// buttons instantly instead of waiting on a re-measure per semitone.
+const sungRange = computed(() => transposedRange(referenceRange.value, transpose.value))
+
+async function loadRange(): Promise<void> {
+  try {
+    const payload = await apiJson<{ range: VocalRange | null }>(
+      `/api/projects/${props.project.id}/reference/pitch`,
+    )
+    referenceRange.value = payload.range
+  } catch {
+    referenceRange.value = null
+  }
+}
+void loadRange()
 
 const duration = computed(() => props.project.reference.duration_seconds)
 const selectionDuration = computed(() => Math.max(0, trimEnd.value - trimStart.value))
@@ -260,6 +278,11 @@ onBeforeUnmount(stop)
             :class="{ active: transpose === step }"
             @click="transpose = step; saveTranspose()"
           >{{ step > 0 ? `+${step}` : step }}</button>
+        </div>
+        <div v-if="sungRange" class="range-readout">
+          <span>RANGE TO SING</span>
+          <strong>{{ sungRange.low_note }} – {{ sungRange.high_note }}</strong>
+          <small>{{ sungRange.semitones.toFixed(0) }} semitones · centred on {{ sungRange.median_note }}</small>
         </div>
         <p class="feature-note">Applied to preview and recording playback. New takes remember this key for analysis and export.</p>
       </section>
