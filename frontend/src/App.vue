@@ -6,6 +6,7 @@ import { transposedRange, type VocalRange } from "./shared/notes"
 
 import CompareView from "./features/compare/CompareView.vue"
 import ExportView from "./features/export/ExportView.vue"
+import PracticeView from "./features/practice/PracticeView.vue"
 import ProjectsView from "./features/projects/ProjectsView.vue"
 import type { NewProjectInput } from "./features/projects/useProjects"
 import { useProjects } from "./features/projects/useProjects"
@@ -329,13 +330,15 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
           </div>
           <nav class="project-tabs">
             <button :class="{ active: activeTab === 'reference' }" @click="chooseTab('reference')"><span>01</span> REFERENCE</button>
-            <button :class="{ active: activeTab === 'takes' }" @click="chooseTab('takes')"><span>02</span> TAKES</button>
-            <button :disabled="selectedTake?.status !== 'analyzed'" :class="{ active: activeTab === 'compare' }" @click="chooseTab('compare')"><span>03</span> COMPARE</button>
-            <button :class="{ active: activeTab === 'export' }" @click="chooseTab('export')"><span>04</span> EXPORT</button>
+            <button :class="{ active: activeTab === 'practice' }" @click="chooseTab('practice')"><span>02</span> PRACTICE</button>
+            <button :class="{ active: activeTab === 'takes' }" @click="chooseTab('takes')"><span>03</span> TAKES</button>
+            <button :disabled="selectedTake?.status !== 'analyzed'" :class="{ active: activeTab === 'compare' }" @click="chooseTab('compare')"><span>04</span> COMPARE</button>
+            <button :class="{ active: activeTab === 'export' }" @click="chooseTab('export')"><span>05</span> EXPORT</button>
           </nav>
         </section>
 
         <ReferenceView v-if="activeTab === 'reference'" :project="selectedProject" @update="handleUpdate" />
+        <PracticeView v-else-if="activeTab === 'practice'" :project="selectedProject" />
         <TakesView
           v-else-if="activeTab === 'takes'"
           :project="selectedProject"

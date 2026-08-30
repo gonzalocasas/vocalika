@@ -204,6 +204,42 @@ body.modal-open { overflow:hidden; }
   .lyrics-stage { padding:18px; }
 }
 
+/* --- practice --------------------------------------------------------- */
+.practice-view { display:grid; gap:18px; }
+.practice-panel { display:grid; gap:10px; }
+.practice-panel h3 { margin:0; font-size:19px; }
+.practice-range { margin:0; color:#d9992e; font:600 20px "IBM Plex Mono",monospace; text-align:right; }
+.practice-range small { display:block; color:#7c817f; font:500 9px "IBM Plex Mono",monospace; letter-spacing:.1em; }
+.practice-live { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid #c96f3e; border-radius:11px; padding:13px 16px; background:rgba(201,111,62,.12); color:#e8b58f; font:600 11px "IBM Plex Mono",monospace; letter-spacing:.1em; }
+.warmup-ladder { display:flex; flex-wrap:wrap; gap:8px; }
+.ladder-step { border:1px solid #33383a; border-radius:10px; padding:13px 15px; background:#1b1e20; color:#e8e2d6; font:600 13px "IBM Plex Mono",monospace; cursor:pointer; }
+.ladder-step:hover { border-color:#d9992e; }
+.ladder-step.active { border-color:#c96f3e; background:#c96f3e; color:#17191a; }
+.exercise-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:10px; }
+.exercise-grid article { display:grid; gap:7px; border:1px solid #33383a; border-radius:12px; padding:15px; background:#1b1e20; }
+.exercise-grid article.active { border-color:#c96f3e; }
+.exercise-grid b { color:#e8e2d6; font:600 20px "IBM Plex Mono",monospace; }
+.exercise-grid span { color:#7c817f; font-size:11px; }
+.exercise-grid article>div { display:flex; gap:7px; }
+.exercise-grid article>div button { flex:1; min-width:0; padding:10px 8px; font-size:9px; }
+.attempt-score { display:grid; gap:5px; border:1px solid #33383a; border-left-width:4px; border-radius:11px; padding:15px 17px; background:#1b1e20; }
+.attempt-score strong { font:600 16px "Space Grotesk",system-ui,sans-serif; }
+.attempt-score span { color:#c9c4ba; font-size:13px; }
+.attempt-score small { color:#7c817f; font-size:11px; }
+.attempt-score .text-button { justify-self:start; margin-top:4px; }
+.verdict-on-pitch { border-left-color:#3ddc97; }
+.verdict-on-pitch strong { color:#3ddc97; }
+.verdict-close { border-left-color:#8fd14f; }
+.verdict-close strong { color:#8fd14f; }
+.verdict-unsteady { border-left-color:#f2c14e; }
+.verdict-unsteady strong { color:#f2c14e; }
+.verdict-off { border-left-color:#ef5d60; }
+.verdict-off strong { color:#ef5d60; }
+.verdict-wrong-note { border-left-color:#ef5d60; }
+.verdict-wrong-note strong { color:#ef5d60; }
+.verdict-not-heard { border-left-color:#6d716f; }
+.verdict-not-heard strong { color:#93908a; }
+
 .compare-view { display:grid; gap:18px; }
 .compare-heading h2 { font-size:24px; }
 .compare-switches { display:flex; gap:10px; }

@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
+from vocalika.api.practice import build_practice_plan, score_attempt
 from vocalika.api.reference_pitch import build_reference_pitch
 from vocalika.api.uploads import safe_upload_name, save_upload
 from vocalika.api.waveform import build_aligned_waveforms, build_waveform_envelope
@@ -260,6 +261,53 @@ def create_projects_router(service: ProjectService) -> APIRouter:
             )
         except (OSError, RuntimeError, ValueError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
+
+    @router.get("/{project_id}/practice")
+    async def practice_plan(project_id: str, transpose: int = 0) -> dict[str, Any]:
+        """Exercises drawn from this song, for warming up before singing it."""
+        try:
+            project = service.repository.load(project_id)
+        except ProjectNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        try:
+            return await run_in_threadpool(
+                build_practice_plan,
+                project,
+                reference_audio_service,
+                service.cache,
+                transpose,
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+    @router.post("/{project_id}/practice/attempt")
+    async def practice_attempt(
+        project_id: str,
+        audio_file: Annotated[UploadFile, File()],
+        kind: Annotated[str, Form()] = "sustained",
+        target_midi: Annotated[float, Form()] = 60.0,
+        to_midi: Annotated[float | None, Form()] = None,
+    ) -> dict[str, Any]:
+        """Score one attempt, measured by the analysis extractor.
+
+        The browser's live display is deliberately approximate; a score the
+        singer will act on is not, so the audio comes back here to be measured
+        properly.
+        """
+        try:
+            service.repository.load(project_id)
+        except ProjectNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        directory = service.repository.project_directory(project_id) / "practice"
+        directory.mkdir(parents=True, exist_ok=True)
+        stored = directory / safe_upload_name(audio_file.filename, "practice attempt")
+        await save_upload(audio_file, stored)
+        try:
+            return await run_in_threadpool(score_attempt, stored, kind, target_midi, to_midi)
+        except (OSError, RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        finally:
+            stored.unlink(missing_ok=True)
 
     @router.get("/{project_id}/takes/{take_id}/audio/{kind}", response_class=FileResponse)
     def take_audio(

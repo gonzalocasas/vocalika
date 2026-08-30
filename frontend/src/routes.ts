@@ -1,4 +1,4 @@
-export type ProjectTab = "reference" | "takes" | "compare" | "export"
+export type ProjectTab = "reference" | "practice" | "takes" | "compare" | "export"
 
 export interface AppRoute {
   projectId: string | null
@@ -6,7 +6,13 @@ export interface AppRoute {
   takeId: string | null
 }
 
-const PROJECT_TABS = new Set<ProjectTab>(["reference", "takes", "compare", "export"])
+const PROJECT_TABS = new Set<ProjectTab>([
+  "reference",
+  "practice",
+  "takes",
+  "compare",
+  "export",
+])
 
 function decodeSegment(value: string | undefined): string | null {
   if (!value) return null
