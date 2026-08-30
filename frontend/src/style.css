@@ -238,6 +238,8 @@ body.modal-open { overflow:hidden; }
 .exercise-grid span { color:#7c817f; font-size:11px; }
 .exercise-grid article>div { display:flex; gap:7px; }
 .exercise-grid article>div button { flex:1; min-width:0; padding:10px 8px; font-size:9px; }
+.sample-credit { margin:4px 0 0; color:#6d716f; font-size:11px; line-height:1.6; }
+.sample-credit a { color:#93908a; }
 .attempt-score { display:grid; gap:5px; border:1px solid #33383a; border-left-width:4px; border-radius:11px; padding:15px 17px; background:#1b1e20; }
 .attempt-score strong { font:600 16px "Space Grotesk",system-ui,sans-serif; }
 .attempt-score span { color:#c9c4ba; font-size:13px; }

@@ -31,6 +31,12 @@ async function load(): Promise<void> {
     plan.value = await apiJson<PracticePlan>(
       `/api/projects/${props.project.id}/practice?transpose=${props.project.transpose_semitones}`,
     )
+    const wanted = [
+      ...(plan.value.warmup?.steps_midi ?? []),
+      ...plan.value.sustained.map((exercise) => exercise.midi),
+      ...plan.value.intervals.flatMap((exercise) => [exercise.from_midi, exercise.to_midi]),
+    ]
+    void tone.preload(wanted)
   } catch (reason) {
     loadError.value = reason instanceof Error ? reason.message : String(reason)
   } finally {
@@ -228,6 +234,14 @@ const countdown = computed(() => {
           </article>
         </div>
       </section>
+      <p class="sample-credit">
+        Reference notes played on the
+        <a href="https://archive.org/details/SalamanderGrandPianoV3" target="_blank" rel="noopener">
+          Salamander Grand Piano</a>
+        by Alexander Holm, licensed
+        <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC-BY 3.0</a>.
+        <span v-if="!tone.usingSamples.value">Samples unavailable — using a synthesised tone.</span>
+      </p>
     </template>
 
     <!-- Fixed, because the exercise being worked on may be far down the page

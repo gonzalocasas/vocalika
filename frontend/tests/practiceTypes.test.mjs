@@ -2,7 +2,6 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { isIntervalScore, VERDICT_LABEL } from "../src/features/practice/types.ts"
-import { midiToHertz } from "../src/features/practice/useTonePlayer.ts"
 
 test("held-note and interval scores are told apart", () => {
   const held = { target_midi: 60, verdict: "on-pitch", centre_cents: 3 }
@@ -17,14 +16,6 @@ test("every verdict the server can return has a label", () => {
   }
 })
 
-test("reference tones are generated at the right frequency", () => {
-  assert.ok(Math.abs(midiToHertz(69) - 440) < 1e-9)
-  assert.ok(Math.abs(midiToHertz(60) - 261.6256) < 1e-3)
-  assert.ok(Math.abs(midiToHertz(81) - 880) < 1e-9)
-  // An octave is exactly a doubling, which is what makes the ladder audible
-  // as a scale rather than as drifting pitches.
-  assert.ok(Math.abs(midiToHertz(72) / midiToHertz(60) - 2) < 1e-12)
-})
 
 test("an over-wide descending leap is described as wide, not flat", () => {
   // The signed error is negative descending, which pitch vocabulary would

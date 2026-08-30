@@ -1,0 +1,11 @@
+Salamander Grand Piano V3
+Recorded by Alexander Holm.
+Licensed under Creative Commons Attribution 3.0 (CC-BY 3.0).
+    https://creativecommons.org/licenses/by/3.0/
+    https://archive.org/details/SalamanderGrandPianoV3
+
+The files here are a subset of that recording: one note every three
+semitones from C2 to C6, encoded as MP3. They are used as reference
+pitches in Vocalika's practice exercises. Nothing else was altered.
+
+Attribution is shown in the application on the practice screen.
