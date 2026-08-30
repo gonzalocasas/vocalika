@@ -8,10 +8,10 @@ import {
   VERDICT_LABEL,
   type AttemptScore,
   type IntervalExercise,
-  type IntervalScore,
   type PracticePlan,
   type SustainedExercise,
 } from "./types"
+import { centsLabel, leapLabel, leapSpanLabel } from "./labels"
 import { useAttempt } from "./useAttempt"
 import { useTonePlayer } from "./useTonePlayer"
 
@@ -110,30 +110,6 @@ async function tryWarmupStep(midi: number, index: number): Promise<void> {
 }
 
 const verdictClass = (verdict: string) => `verdict-${verdict}`
-
-/**
- * Describe how the leap missed.
- *
- * An interval is a distance, so it is too wide or too narrow -- "flat" and
- * "sharp" belong to pitches. Descending leaps make the distinction matter:
- * over-jumping downward produces a negative signed error, which the pitch
- * vocabulary would call flat when the singer actually went too far.
- */
-function leapLabel(score: IntervalScore): string {
-  if (score.wrong_direction) return "you leapt the other way"
-  const width = score.width_error_cents
-  if (width === null) return "—"
-  const rounded = Math.round(width)
-  if (Math.abs(rounded) < 10) return "exactly the right distance"
-  return `${Math.abs(rounded)}¢ too ${rounded > 0 ? "wide" : "narrow"}`
-}
-
-function centsLabel(cents: number | null): string {
-  if (cents === null) return "—"
-  const rounded = Math.round(cents)
-  if (rounded === 0) return "exactly on pitch"
-  return `${Math.abs(rounded)}¢ ${rounded < 0 ? "flat" : "sharp"}`
-}
 
 const currentScore = computed<AttemptScore | null>(() => attempt.score.value)
 
@@ -275,9 +251,8 @@ const countdown = computed(() => {
           <strong>{{ VERDICT_LABEL[currentScore.verdict] ?? currentScore.verdict }}</strong>
           <template v-if="isIntervalScore(currentScore)">
             <span v-if="currentScore.interval_error_cents !== null">
-              The leap should span {{ Math.abs(currentScore.target_semitones) }} semitones
-              {{ currentScore.target_semitones < 0 ? "down" : "up" }}; you sang
-              {{ Math.abs(currentScore.sung_semitones ?? 0).toFixed(1) }} —
+              The leap should span {{ leapSpanLabel(currentScore.target_semitones) }};
+              you sang {{ Math.abs(currentScore.sung_semitones ?? 0).toFixed(1) }} —
               {{ leapLabel(currentScore) }}
             </span>
             <small v-if="currentScore.first">
