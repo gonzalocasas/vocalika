@@ -8,6 +8,7 @@ import {
   VERDICT_LABEL,
   type AttemptScore,
   type IntervalExercise,
+  type IntervalScore,
   type PracticePlan,
   type SustainedExercise,
 } from "./types"
@@ -109,6 +110,23 @@ async function tryWarmupStep(midi: number, index: number): Promise<void> {
 }
 
 const verdictClass = (verdict: string) => `verdict-${verdict}`
+
+/**
+ * Describe how the leap missed.
+ *
+ * An interval is a distance, so it is too wide or too narrow -- "flat" and
+ * "sharp" belong to pitches. Descending leaps make the distinction matter:
+ * over-jumping downward produces a negative signed error, which the pitch
+ * vocabulary would call flat when the singer actually went too far.
+ */
+function leapLabel(score: IntervalScore): string {
+  if (score.wrong_direction) return "you leapt the other way"
+  const width = score.width_error_cents
+  if (width === null) return "—"
+  const rounded = Math.round(width)
+  if (Math.abs(rounded) < 10) return "exactly the right distance"
+  return `${Math.abs(rounded)}¢ too ${rounded > 0 ? "wide" : "narrow"}`
+}
 
 function centsLabel(cents: number | null): string {
   if (cents === null) return "—"
@@ -257,12 +275,14 @@ const countdown = computed(() => {
           <strong>{{ VERDICT_LABEL[currentScore.verdict] ?? currentScore.verdict }}</strong>
           <template v-if="isIntervalScore(currentScore)">
             <span v-if="currentScore.interval_error_cents !== null">
-              you sang {{ currentScore.sung_semitones?.toFixed(1) }} semitones against
-              {{ currentScore.target_semitones }} — {{ centsLabel(currentScore.interval_error_cents) }}
+              The leap should span {{ Math.abs(currentScore.target_semitones) }} semitones
+              {{ currentScore.target_semitones < 0 ? "down" : "up" }}; you sang
+              {{ Math.abs(currentScore.sung_semitones ?? 0).toFixed(1) }} —
+              {{ leapLabel(currentScore) }}
             </span>
             <small v-if="currentScore.first">
-              first note {{ centsLabel(currentScore.first.centre_cents) }} ·
-              landing {{ centsLabel(currentScore.second?.centre_cents ?? null) }}
+              You started {{ centsLabel(currentScore.first.centre_cents) }} and landed
+              {{ centsLabel(currentScore.second?.centre_cents ?? null) }}
             </small>
           </template>
           <template v-else>

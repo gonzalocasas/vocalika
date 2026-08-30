@@ -168,3 +168,34 @@ def test_a_browser_webm_interval_attempt_can_be_scored(tmp_path: Path) -> None:
     score = score_attempt(webm, "interval", 55.0, 62.0)
     assert score["sung_semitones"] is not None
     assert abs(score["interval_error_cents"]) < 60
+
+
+def test_an_over_wide_descending_leap_is_reported_as_wide_not_flat(tmp_path: Path) -> None:
+    """A descending leap that goes too far is too wide, not flat.
+
+    The signed error is negative here, which the pitch vocabulary would call
+    "flat" -- but the singer over-jumped, which is the opposite impression.
+    """
+    # Asked for -5 (down a fourth); sings roughly -7 (down a fifth).
+    path = tone(tmp_path / "wide-down.wav", [(1.2, 62.0), (1.2, 55.0)])
+    result = score_interval(path, 62.0, 57.0)
+    assert result["interval_error_cents"] < 0, "signed error is negative descending"
+    assert result["width_error_cents"] > 100, "but the leap was too wide"
+    assert result["wrong_direction"] is False
+
+
+def test_a_too_narrow_ascending_leap_reports_negative_width(tmp_path: Path) -> None:
+    path = tone(tmp_path / "narrow-up.wav", [(1.2, 55.0), (1.2, 59.0)])
+    result = score_interval(path, 55.0, 62.0)
+    assert result["width_error_cents"] < -100
+    assert result["wrong_direction"] is False
+
+
+def test_leaping_the_wrong_way_is_flagged_as_such(tmp_path: Path) -> None:
+    # Asked to go up a fifth; goes down a fifth instead. The sizes match, so
+    # width alone would call this correct.
+    path = tone(tmp_path / "wrong-way.wav", [(1.2, 62.0), (1.2, 55.0)])
+    result = score_interval(path, 62.0, 69.0)
+    assert result["wrong_direction"] is True
+    assert abs(result["width_error_cents"]) < 100, "the size was about right"
+    assert result["verdict"] == "off", "but it still has to fail"

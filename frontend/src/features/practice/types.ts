@@ -57,6 +57,9 @@ export interface IntervalScore {
   sung_semitones: number | null
   target_semitones: number
   interval_error_cents: number | null
+  /** Positive when the leap was wider than asked for, negative when narrower. */
+  width_error_cents: number | null
+  wrong_direction: boolean
   verdict: string
 }
 

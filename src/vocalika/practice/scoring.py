@@ -211,13 +211,26 @@ def score_interval(
     target = to_midi - from_midi
     error = 100.0 * (sung - target)
 
+    # "Flat" and "sharp" describe a pitch against a target; an interval is a
+    # distance, so it is too wide or too narrow. The distinction matters most
+    # descending, where a bigger leap makes the signed error more negative and
+    # would read as "flat" when the singer actually over-jumped.
+    width_error = 100.0 * (abs(sung) - abs(target))
+    wrong_way = target != 0 and sung != 0 and (sung > 0) != (target > 0)
+
     return {
         "first": asdict(_centre_score(first_centre, from_midi, first, track)),
         "second": asdict(_centre_score(second_centre, to_midi, second, track)),
         "sung_semitones": round(sung, 2),
         "target_semitones": round(target, 2),
         "interval_error_cents": round(error, 1),
+        "width_error_cents": round(width_error, 1),
+        #: True when the leap went the opposite way to the one asked for, which
+        #: is a different mistake from getting its size wrong.
+        "wrong_direction": bool(wrong_way),
         "verdict": (
+            # Signed error, not width, so leaping the wrong way is never
+            # mistaken for a leap of nearly the right size.
             "on-pitch" if abs(error) <= 30 else "close" if abs(error) <= 60 else "off"
         ),
     }

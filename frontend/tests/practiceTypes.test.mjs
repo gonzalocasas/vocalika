@@ -25,3 +25,18 @@ test("reference tones are generated at the right frequency", () => {
   // as a scale rather than as drifting pitches.
   assert.ok(Math.abs(midiToHertz(72) / midiToHertz(60) - 2) < 1e-12)
 })
+
+test("an over-wide descending leap is described as wide, not flat", () => {
+  // The signed error is negative descending, which pitch vocabulary would
+  // call "flat" while the singer actually over-jumped.
+  const score = {
+    target_semitones: -5,
+    sung_semitones: -6.7,
+    interval_error_cents: -170,
+    width_error_cents: 170,
+    wrong_direction: false,
+    verdict: "off",
+  }
+  assert.equal(isIntervalScore(score), true)
+  assert.ok(score.width_error_cents > 0, "wider than asked")
+})
