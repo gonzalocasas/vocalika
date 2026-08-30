@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import numpy as np
 
 from vocalika.api.reference_pitch import build_reference_pitch
+from vocalika.audio.decode import decode_for_analysis
 from vocalika.cache.manager import CacheManager
 from vocalika.practice.exercises import build_exercises
 from vocalika.practice.notes import segment_notes
@@ -44,9 +46,16 @@ def score_attempt(
     target_midi: float,
     to_midi: float | None,
 ) -> dict[str, Any]:
-    """Score one recorded exercise attempt."""
-    if kind == "interval":
-        if to_midi is None:
-            raise ValueError("An interval attempt needs both a starting and a target note.")
-        return score_interval(audio_path, target_midi, to_midi)
-    return asdict(score_held_note(audio_path, target_midi))
+    """Score one recorded exercise attempt.
+
+    Browser recordings arrive as WebM/Opus, which the analysis path cannot read
+    directly, so the attempt is decoded to the analysis format first -- the
+    same step a take goes through before it is analysed.
+    """
+    with TemporaryDirectory(prefix="vocalika-attempt-") as raw:
+        decoded = decode_for_analysis(audio_path, Path(raw) / "attempt.wav")
+        if kind == "interval":
+            if to_midi is None:
+                raise ValueError("An interval attempt needs both a starting and a target note.")
+            return score_interval(decoded, target_midi, to_midi)
+        return asdict(score_held_note(decoded, target_midi))

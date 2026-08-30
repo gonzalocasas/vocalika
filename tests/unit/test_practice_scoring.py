@@ -129,3 +129,42 @@ def test_verdicts_separate_tuning_from_steadiness() -> None:
     assert verdict_for(5.0, 90.0) == "unsteady"
     assert verdict_for(5.0, 12.0) == "on-pitch", "healthy vibrato is not a fault"
     assert verdict_for(None, None) == "not-heard"
+
+
+def test_a_browser_webm_recording_can_be_scored(tmp_path: Path) -> None:
+    """MediaRecorder produces WebM/Opus, which soundfile cannot read directly.
+
+    Attempts must be decoded first, exactly as a take is, or every attempt
+    recorded in the browser fails with "Format not recognised".
+    """
+    import subprocess
+
+    from vocalika.api.practice import score_attempt
+
+    source = tone(tmp_path / "source.wav", [(2.0, 60.0)])
+    webm = tmp_path / "attempt.webm"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-i", str(source), "-c:a", "libopus", str(webm)],
+        check=True,
+    )
+
+    score = score_attempt(webm, "sustained", 60.0, None)
+    assert score["verdict"] == "on-pitch"
+    assert abs(score["centre_cents"]) < 20
+
+
+def test_a_browser_webm_interval_attempt_can_be_scored(tmp_path: Path) -> None:
+    import subprocess
+
+    from vocalika.api.practice import score_attempt
+
+    source = tone(tmp_path / "leap.wav", [(1.2, 55.0), (1.2, 62.0)])
+    webm = tmp_path / "leap.webm"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-i", str(source), "-c:a", "libopus", str(webm)],
+        check=True,
+    )
+
+    score = score_attempt(webm, "interval", 55.0, 62.0)
+    assert score["sung_semitones"] is not None
+    assert abs(score["interval_error_cents"]) < 60

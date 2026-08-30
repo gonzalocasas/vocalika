@@ -300,7 +300,7 @@ def create_projects_router(service: ProjectService) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(error)) from error
         directory = service.repository.project_directory(project_id) / "practice"
         directory.mkdir(parents=True, exist_ok=True)
-        stored = directory / safe_upload_name(audio_file.filename, "practice attempt")
+        stored = directory / safe_upload_name(audio_file.filename, "practice-attempt")
         await save_upload(audio_file, stored)
         try:
             return await run_in_threadpool(score_attempt, stored, kind, target_midi, to_midi)
