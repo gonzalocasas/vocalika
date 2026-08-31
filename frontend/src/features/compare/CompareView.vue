@@ -235,6 +235,7 @@ async function render(): Promise<void> {
   await Plotly.react(pitchPlot.value, [
     ...(showWaveforms.value && referenceWave ? [{ ...referenceWave, type: "scattergl" as const, mode: "lines" as const, yaxis: "y2", line: { width: 3, color: "rgba(232,226,214,.18)" }, hoverinfo: "skip" as const, showlegend: false }] : []),
     ...(showWaveforms.value && performanceWave ? [{ ...performanceWave, type: "scattergl" as const, mode: "lines" as const, yaxis: "y2", line: { width: 3, color: "rgba(217,153,46,.20)" }, hoverinfo: "skip" as const, showlegend: false }] : []),
+    { x: [frames.reference_time[0] ?? 0], y: [pitchRange[0]], yaxis: "y3", type: "scattergl" as const, mode: "markers" as const, marker: { opacity: 0, size: 0.1 }, hoverinfo: "skip" as const, showlegend: false },
     { x: frames.reference_time, y: seriesToCents(referencePitch), name: "Reference", visible: showReference.value, type: "scattergl", mode: "lines", line: { color: "#e8e2d6", width: 2.2 }, connectgaps: false },
     { x: frames.reference_time, y: seriesToCents(performancePitch), name: "Mine", visible: showPerformance.value, type: "scattergl", mode: "lines", line: { color: "#d9992e", width: 2.2 }, connectgaps: false },
     ...(showPoints.value ? [
