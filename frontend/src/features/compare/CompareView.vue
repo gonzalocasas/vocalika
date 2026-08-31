@@ -12,6 +12,7 @@ import { displayContour, rawContour } from "../../plotData"
 import { apiJson } from "../../shared/api"
 import type { AlignedWaveforms, AnalysisArtifact, Project, Take } from "../../shared/types"
 import PitchHeatmapBand from "./PitchHeatmapBand.vue"
+import { midiToCents, noteTicks, pitchExtent, seriesToCents } from "./pitchAxis"
 
 const props = defineProps<{ project: Project; take: Take; artifact: AnalysisArtifact }>()
 const emit = defineEmits<{ export: [] }>()
@@ -143,7 +144,32 @@ function plotElements(): PlotlyHTMLElement[] {
     .map((value) => value as unknown as PlotlyHTMLElement)
 }
 
+/**
+ * Keep the note-name axis on the same span as the cents axis.
+ *
+ * The two are separate axes pinned to one range, so a vertical zoom moves the
+ * cents scale and would leave the names beside the wrong pitches. Reading the
+ * range back from the plot covers zoom, pan and double-click autoscale alike.
+ */
+async function syncNoteAxis(): Promise<void> {
+  const plot = pitchPlot.value as unknown as { layout?: { yaxis?: { range?: number[] } } } | null
+  const range = plot?.layout?.yaxis?.range
+  if (!plot || !range || range.length !== 2) return
+  const Plotly = await loadPlotly()
+  // Plotly's typings cover named layout keys, not the dotted update paths its
+  // relayout API accepts.
+  await Plotly.relayout(
+    pitchPlot.value as unknown as PlotlyHTMLElement,
+    { "yaxis3.range": [range[0], range[1]] } as unknown as Partial<Plotly.Layout>,
+  )
+}
+
 async function mirror(source: PlotlyHTMLElement, event: PlotRelayoutEvent): Promise<void> {
+  if (source === (pitchPlot.value as unknown as PlotlyHTMLElement)) {
+    const update = event as unknown as Record<string, unknown>
+    const touchedY = Object.keys(update).some((key) => key.startsWith("yaxis."))
+    if (touchedY) void syncNoteAxis()
+  }
   if (mirroring) return
   const update = event as unknown as Record<string, unknown>
   const start = Number(update["xaxis.range[0]"])
@@ -189,24 +215,39 @@ async function render(): Promise<void> {
     paper_bgcolor: "#0e1112",
     plot_bgcolor: "#0e1112",
     font: { color: "#7c817f", family: "IBM Plex Mono, monospace", size: 10 },
-    margin: { l: 52, r: 18, t: 18, b: 42 },
+    margin: { l: 62, r: 46, t: 18, b: 42 },
     hovermode: "x unified" as const,
     uirevision: props.artifact.created_at,
     xaxis: { gridcolor: "#262b2c", title: { text: "Reference time (seconds)" } },
     yaxis: { gridcolor: "#262b2c" },
   }
+  // Both vertical axes are pinned to the same span; an autoranged pair would
+  // drift apart and put the note names beside the wrong pitches.
+  const extent = pitchExtent([
+    referencePitch,
+    performancePitch,
+    ...(showPoints.value ? [rawContour(frames.reference_midi, referenceAccepted)] : []),
+  ])
+  const pitchRange: [number, number] = [midiToCents(extent.lowMidi), midiToCents(extent.highMidi)]
+  const ticks = noteTicks(extent)
   const referenceWave = waveforms.value ? waveformBars(waveforms.value.time, waveforms.value.reference_amplitude) : null
   const performanceWave = waveforms.value ? waveformBars(waveforms.value.time, waveforms.value.performance_amplitude) : null
   await Plotly.react(pitchPlot.value, [
     ...(showWaveforms.value && referenceWave ? [{ ...referenceWave, type: "scattergl" as const, mode: "lines" as const, yaxis: "y2", line: { width: 3, color: "rgba(232,226,214,.18)" }, hoverinfo: "skip" as const, showlegend: false }] : []),
     ...(showWaveforms.value && performanceWave ? [{ ...performanceWave, type: "scattergl" as const, mode: "lines" as const, yaxis: "y2", line: { width: 3, color: "rgba(217,153,46,.20)" }, hoverinfo: "skip" as const, showlegend: false }] : []),
-    { x: frames.reference_time, y: referencePitch, name: "Reference", visible: showReference.value, type: "scattergl", mode: "lines", line: { color: "#e8e2d6", width: 2.2 }, connectgaps: false },
-    { x: frames.reference_time, y: performancePitch, name: "Mine", visible: showPerformance.value, type: "scattergl", mode: "lines", line: { color: "#d9992e", width: 2.2 }, connectgaps: false },
+    { x: frames.reference_time, y: seriesToCents(referencePitch), name: "Reference", visible: showReference.value, type: "scattergl", mode: "lines", line: { color: "#e8e2d6", width: 2.2 }, connectgaps: false },
+    { x: frames.reference_time, y: seriesToCents(performancePitch), name: "Mine", visible: showPerformance.value, type: "scattergl", mode: "lines", line: { color: "#d9992e", width: 2.2 }, connectgaps: false },
     ...(showPoints.value ? [
-      { x: frames.reference_time, y: rawContour(frames.reference_midi, referenceAccepted), name: "Reference points", type: "scattergl" as const, mode: "markers" as const, marker: { color: "#e8e2d6", size: 3, opacity: .35 } },
-      { x: frames.reference_time, y: shifted(rawContour(frames.performance_midi, performanceAccepted), bias), name: "Mine points", type: "scattergl" as const, mode: "markers" as const, marker: { color: "#d9992e", size: 3, opacity: .35 } },
+      { x: frames.reference_time, y: seriesToCents(rawContour(frames.reference_midi, referenceAccepted)), name: "Reference points", type: "scattergl" as const, mode: "markers" as const, marker: { color: "#e8e2d6", size: 3, opacity: .35 } },
+      { x: frames.reference_time, y: seriesToCents(shifted(rawContour(frames.performance_midi, performanceAccepted), bias)), name: "Mine points", type: "scattergl" as const, mode: "markers" as const, marker: { color: "#d9992e", size: 3, opacity: .35 } },
     ] : []),
-  ], { ...base, height: 320, shapes: [cursorShape(playbackPosition.value)], yaxis: { ...base.yaxis, title: { text: "Continuous MIDI" } }, yaxis2: { overlaying: "y", range: [-1.05, 1.05], visible: false, fixedrange: true } }, { responsive: true, displaylogo: false })
+  ], { ...base, height: 320, shapes: [cursorShape(playbackPosition.value)],
+    // Cents on the left so the gap between the contours is the error the tiles
+    // report; note names on the right so the pitches stay readable as music.
+    yaxis: { ...base.yaxis, title: { text: "Cents from C4  (100¢ = 1 semitone)" }, range: pitchRange, zeroline: false },
+    yaxis2: { overlaying: "y", range: [-1.05, 1.05], visible: false, fixedrange: true },
+    yaxis3: { overlaying: "y", side: "right" as const, range: pitchRange, tickvals: ticks.tickvals, ticktext: ticks.ticktext, showgrid: false, zeroline: false, tickfont: { color: "#7c817f" } },
+  }, { responsive: true, displaylogo: false })
 
   await Plotly.react(confidencePlot.value, [
     { x: frames.reference_time, y: refConfidence.map((value) => 100 * value), name: "Reference", type: "scattergl", mode: "lines", line: { color: "#4f8d7b", width: 1.6 } },

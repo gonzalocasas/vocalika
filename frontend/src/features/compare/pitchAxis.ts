@@ -1,0 +1,89 @@
+import { noteName } from "../../shared/notes.ts"
+
+/**
+ * The pitch chart's vertical scale.
+ *
+ * Plotting MIDI numbers put the chart in semitones while every error the app
+ * reports is in cents, so reading one against the other meant dividing by a
+ * hundred in your head. In cents the vertical gap between the two contours is
+ * the error, directly comparable to the metric tiles beside it.
+ *
+ * C4 is the zero point: cents are a relative unit and need an anchor, and
+ * middle C is the one already built into MIDI numbering.
+ */
+export const ANCHOR_MIDI = 60
+
+export function midiToCents(midi: number): number {
+  return (midi - ANCHOR_MIDI) * 100
+}
+
+export function centsToMidi(cents: number): number {
+  return cents / 100 + ANCHOR_MIDI
+}
+
+/** Convert a plotted series, preserving the nulls that break the line at rests. */
+export function seriesToCents(values: Array<number | null>): Array<number | null> {
+  return values.map((value) => (value === null || !Number.isFinite(value) ? null : midiToCents(value)))
+}
+
+export interface PitchExtent {
+  lowMidi: number
+  highMidi: number
+}
+
+/** The pitch span to show, padded so the contours do not touch the frame. */
+export function pitchExtent(series: Array<Array<number | null>>, paddingSemitones = 1.5): PitchExtent {
+  const present: number[] = []
+  for (const values of series) {
+    for (const value of values) {
+      if (value !== null && Number.isFinite(value)) present.push(value)
+    }
+  }
+  if (present.length === 0) return { lowMidi: 55, highMidi: 67 }
+  let low = Math.min(...present) - paddingSemitones
+  let high = Math.max(...present) + paddingSemitones
+  // A take that never leaves one note would otherwise be drawn at absurd zoom.
+  if (high - low < 6) {
+    const middle = (low + high) / 2
+    low = middle - 3
+    high = middle + 3
+  }
+  return { lowMidi: low, highMidi: high }
+}
+
+// Steps that land on musically meaningful intervals: semitone, tone, minor
+// third, major third, fifth, octave. A step of five semitones would put ticks
+// on notes with no relationship to each other.
+const TICK_STEPS = [1, 2, 3, 4, 6, 12]
+
+export interface NoteTicks {
+  /** Positions in cents, matching the axis the notes are drawn against. */
+  tickvals: number[]
+  ticktext: string[]
+}
+
+/**
+ * Note-name ticks across a pitch span.
+ *
+ * The step widens as the span grows so the labels never collide; zoomed in far
+ * enough, every semitone is named.
+ */
+export function noteTicks(
+  { lowMidi, highMidi }: PitchExtent,
+  maximumTicks = 14,
+): NoteTicks {
+  const span = Math.max(0, highMidi - lowMidi)
+  const step =
+    TICK_STEPS.find((candidate) => span / candidate <= maximumTicks) ?? TICK_STEPS[TICK_STEPS.length - 1]
+
+  const tickvals: number[] = []
+  const ticktext: string[] = []
+  // Start from a multiple of the step measured from C, so the labels land on
+  // the same notes however the view is scrolled.
+  const first = Math.ceil(lowMidi / step) * step
+  for (let midi = first; midi <= highMidi; midi += step) {
+    tickvals.push(midiToCents(midi))
+    ticktext.push(noteName(midi))
+  }
+  return { tickvals, ticktext }
+}
