@@ -9,7 +9,8 @@ from numpy.typing import NDArray
 from vocalika import __version__
 from vocalika.analysis.pitch import PyinPitchExtractor
 from vocalika.analysis.pitch_cache import extract_clean_pitch
-from vocalika.audio.decode import hash_file
+from vocalika.audio.preprocessing import normalize_for_analysis
+from vocalika.audio.sources import LocalAudioSource
 from vocalika.cache.manager import CacheManager
 from vocalika.config import AnalysisConfig
 from vocalika.projects.models import Project
@@ -32,11 +33,21 @@ def build_reference_pitch(
     later one -- including the pipeline's own, when a take is finally
     analysed -- is a cache read.
 
+    That shared cache is why the audio has to be prepared exactly as the
+    pipeline prepares it. The entry is keyed on the hash of the *source*
+    vocal, but the track stored under it must come from the analysis-rate
+    normalization of that file. Extracting straight from the source instead
+    would key a 44.1 kHz track under the hash the pipeline reads for its
+    16 kHz one, and every later analysis would silently compare against a
+    reference measured with a different window.
+
     Unvoiced frames are returned as null rather than dropped, so the client
     breaks the line at a rest instead of interpolating across it.
     """
     config = config or AnalysisConfig()
     vocal_path = Path(reference_audio.resolve(project, "vocal", transpose_semitones))
+    asset = LocalAudioSource(vocal_path).acquire()
+    normalized = normalize_for_analysis(asset, cache, config.analysis_sample_rate)
     extractor = PyinPitchExtractor(
         hop_length=config.pitch_hop_length,
         frame_length=config.pitch_frame_length,
@@ -46,8 +57,8 @@ def build_reference_pitch(
         harmonic_margin=config.pitch_harmonic_margin,
     )
     cached = extract_clean_pitch(
-        audio_path=vocal_path,
-        content_hash=hash_file(vocal_path),
+        audio_path=normalized.path,
+        content_hash=asset.content_hash,
         cache=cache,
         extractor=extractor,
         cleaning_parameters={
