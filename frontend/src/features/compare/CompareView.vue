@@ -33,7 +33,11 @@ const takePlaybackOffset = resolvePlaybackOffset(
   props.artifact.comparison.frames.performance_time,
 )
 const selectionStart = ref(times[0] ?? 0)
-const selectionEnd = ref(Math.min(times.at(-1) ?? 30, 30))
+// The whole take, so SELECTED RANGE and FULL ANALYSIS agree until the range is
+// actually narrowed. Defaulting to the first thirty seconds made the two scopes
+// disagree on load, with no indication that the selection was not what the
+// fully zoomed-out chart was showing.
+const selectionEnd = ref(times.at(-1) ?? 30)
 const looping = ref(false)
 const activePlayer = ref<"reference" | "mix" | "take" | null>(null)
 const playbackPosition = ref(selectionStart.value)
@@ -66,6 +70,15 @@ const summary = computed(() => metricScope.value === "full"
 // The mean is shown alongside the median rather than instead of it: a wide
 // gap between them is itself the signal that a few badly-tracked frames are
 // carrying the score, which is exactly when the mean misleads.
+// Naming the interval is the point: a metric scoped to part of a take must say
+// which part, or it silently disagrees with the chart beside it.
+const scopeLabel = computed(() => {
+  if (metricScope.value === "full") return "whole take"
+  const start = selectionStart.value
+  const end = selectionEnd.value
+  return `${start.toFixed(1)}\u2013${end.toFixed(1)}s`
+})
+
 const medianError = computed(() => comparisonMode.value === "absolute"
   ? summary.value?.median_absolute_error_cents
   : summary.value?.relative_median_absolute_error_cents)
@@ -352,8 +365,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="metric-strip">
-      <article><span>{{ comparisonMode === "absolute" ? "TYPICAL ERROR" : "RELATIVE TYPICAL" }}</span><strong class="accent-text">{{ metric(medianError, "¢") }}</strong><small>median frame{{ metricScope === "selection" ? " · selected interval" : "" }}</small></article>
-      <article><span>{{ comparisonMode === "absolute" ? "MEAN ERROR" : "RELATIVE MEAN" }}</span><strong>{{ metric(meanError, "¢") }}</strong><small>pulled up by outliers</small></article>
+      <article><span>{{ comparisonMode === "absolute" ? "TYPICAL ERROR" : "RELATIVE TYPICAL" }}</span><strong class="accent-text">{{ metric(medianError, "¢") }}</strong><small>median frame · {{ scopeLabel }}</small></article>
+      <article><span>{{ comparisonMode === "absolute" ? "MEAN ERROR" : "RELATIVE MEAN" }}</span><strong>{{ metric(meanError, "¢") }}</strong><small>outlier-sensitive · {{ scopeLabel }}</small></article>
       <article><span>{{ metricScope === "selection" ? "LOCAL BIAS" : "GLOBAL BIAS" }}</span><strong>{{ metric(summary?.global_bias_cents, "¢") }}</strong><small>median signed offset</small></article>
       <article><span>WITHIN ±25¢</span><strong>{{ metric(within25, "%") }}</strong><small>good intonation</small></article>
       <article><span>WITHIN ±50¢</span><strong>{{ metric(within50, "%") }}</strong><small>within half a semitone</small></article>
