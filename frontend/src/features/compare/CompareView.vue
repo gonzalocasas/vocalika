@@ -63,6 +63,12 @@ const selectedSummary = computed(() => calculateRangeSummary(
 const summary = computed(() => metricScope.value === "full"
   ? props.artifact.comparison.summary
   : selectedSummary.value)
+// The mean is shown alongside the median rather than instead of it: a wide
+// gap between them is itself the signal that a few badly-tracked frames are
+// carrying the score, which is exactly when the mean misleads.
+const medianError = computed(() => comparisonMode.value === "absolute"
+  ? summary.value?.median_absolute_error_cents
+  : summary.value?.relative_median_absolute_error_cents)
 const meanError = computed(() => comparisonMode.value === "absolute"
   ? summary.value?.mean_absolute_error_cents
   : summary.value?.relative_mean_absolute_error_cents)
@@ -346,7 +352,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="metric-strip">
-      <article><span>{{ comparisonMode === "absolute" ? "MEAN ERROR" : "RELATIVE MEAN" }}</span><strong class="accent-text">{{ metric(meanError, "¢") }}</strong><small>{{ metricScope === "selection" ? "selected interval" : "confident aligned frames" }}</small></article>
+      <article><span>{{ comparisonMode === "absolute" ? "TYPICAL ERROR" : "RELATIVE TYPICAL" }}</span><strong class="accent-text">{{ metric(medianError, "¢") }}</strong><small>median frame{{ metricScope === "selection" ? " · selected interval" : "" }}</small></article>
+      <article><span>{{ comparisonMode === "absolute" ? "MEAN ERROR" : "RELATIVE MEAN" }}</span><strong>{{ metric(meanError, "¢") }}</strong><small>pulled up by outliers</small></article>
       <article><span>{{ metricScope === "selection" ? "LOCAL BIAS" : "GLOBAL BIAS" }}</span><strong>{{ metric(summary?.global_bias_cents, "¢") }}</strong><small>median signed offset</small></article>
       <article><span>WITHIN ±25¢</span><strong>{{ metric(within25, "%") }}</strong><small>good intonation</small></article>
       <article><span>WITHIN ±50¢</span><strong>{{ metric(within50, "%") }}</strong><small>within half a semitone</small></article>

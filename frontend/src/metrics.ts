@@ -15,6 +15,8 @@ export interface MetricSummary {
   global_bias_cents: number
   mean_absolute_error_cents: number
   relative_mean_absolute_error_cents: number
+  median_absolute_error_cents: number
+  relative_median_absolute_error_cents: number
   within_15_percent: number
   within_25_percent: number
   within_50_percent: number
@@ -128,6 +130,8 @@ export function calculateRangeSummary(
     global_bias_cents: bias,
     mean_absolute_error_cents: mean(absoluteErrors),
     relative_mean_absolute_error_cents: mean(relativeErrors),
+    median_absolute_error_cents: median(absoluteErrors),
+    relative_median_absolute_error_cents: median(relativeErrors),
     within_15_percent: within(absoluteErrors, 15),
     within_25_percent: within(absoluteErrors, 25),
     within_50_percent: within(absoluteErrors, 50),

@@ -77,3 +77,27 @@ test("selected-range metrics are unavailable without confident paired frames", (
 
   assert.equal(summary, null)
 })
+
+test("selected-range metrics report the typical frame as well as the mean", () => {
+  // One badly-tracked frame — an octave out — must not be allowed to speak for
+  // the whole selection. The mean is dragged; the median is not.
+  const summary = calculateRangeSummary(
+    {
+      reference_time: [0, 1, 2, 3, 4],
+      reference_midi: [60, 60, 60, 60, 60],
+      performance_midi: [60.1, 60.1, 60.1, 60.1, 72],
+      valid: [true, true, true, true, true],
+    },
+    [],
+    0,
+    5,
+    10,
+  )
+  assert.ok(summary)
+  assert.ok(summary.median_absolute_error_cents < 20, "the typical frame is in tune")
+  assert.ok(summary.mean_absolute_error_cents > 200, "the mean carries the octave error")
+  assert.ok(
+    summary.mean_absolute_error_cents > 10 * summary.median_absolute_error_cents,
+    "a wide mean/median gap is the signal that outliers dominate",
+  )
+})

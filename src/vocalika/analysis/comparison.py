@@ -23,6 +23,11 @@ class ComparisonResult:
     global_bias_cents: float
     mean_absolute_error_cents: float
     relative_mean_absolute_error_cents: float
+    #: The typical frame. The mean is pulled a long way by a small number of
+    #: badly-tracked frames -- an octave error is worth twelve ordinary ones --
+    #: so on difficult material it reports a take as far worse than it sounds.
+    median_absolute_error_cents: float
+    relative_median_absolute_error_cents: float
     within_15_percent: float
     within_25_percent: float
     within_50_percent: float
@@ -71,6 +76,8 @@ def compare_alignment(
         global_bias_cents=bias,
         mean_absolute_error_cents=float(np.mean(absolute_values)),
         relative_mean_absolute_error_cents=float(np.mean(relative_values)),
+        median_absolute_error_cents=float(np.median(absolute_values)),
+        relative_median_absolute_error_cents=float(np.median(relative_values)),
         within_15_percent=float(100.0 * np.mean(absolute_values <= excellent_tolerance_cents)),
         within_25_percent=float(100.0 * np.mean(absolute_values <= good_tolerance_cents)),
         within_50_percent=float(100.0 * np.mean(absolute_values <= noticeable_tolerance_cents)),

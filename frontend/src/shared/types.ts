@@ -2,6 +2,8 @@ export interface AnalysisSummary {
   global_bias_cents: number
   mean_absolute_error_cents: number
   relative_mean_absolute_error_cents?: number
+  median_absolute_error_cents?: number
+  relative_median_absolute_error_cents?: number
   within_15_percent?: number
   within_25_percent: number
   within_50_percent: number

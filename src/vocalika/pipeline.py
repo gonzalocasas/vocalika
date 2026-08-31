@@ -182,12 +182,7 @@ def run_analysis(
         concert_pitch_hz=config.concert_pitch_hz,
         harmonic_margin=config.pitch_harmonic_margin,
     )
-    cleaning_parameters = {
-        "confidence_threshold": config.pitch_confidence_threshold,
-        "octave_window": config.octave_window_frames,
-        "max_gap_seconds": config.max_pitch_gap_seconds,
-        "sustain_confidence_threshold": config.pitch_sustain_confidence_threshold,
-    }
+    cleaning_parameters = config.cleaning_parameters()
     progress("Extracting reference pitch")
     cached_reference_pitch = extract_clean_pitch(
         audio_path=normalized_reference.path,
@@ -416,6 +411,10 @@ def run_analysis(
             "summary": {
                 "global_bias_cents": comparison.global_bias_cents,
                 "mean_absolute_error_cents": comparison.mean_absolute_error_cents,
+                "median_absolute_error_cents": comparison.median_absolute_error_cents,
+                "relative_median_absolute_error_cents": (
+                    comparison.relative_median_absolute_error_cents
+                ),
                 "relative_mean_absolute_error_cents": (
                     comparison.relative_mean_absolute_error_cents
                 ),

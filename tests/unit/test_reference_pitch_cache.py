@@ -84,12 +84,7 @@ def test_the_contour_endpoint_caches_what_the_pipeline_would_read(tmp_path: Path
             concert_pitch_hz=config.concert_pitch_hz,
             harmonic_margin=config.pitch_harmonic_margin,
         ),
-        cleaning_parameters={
-            "confidence_threshold": config.pitch_confidence_threshold,
-            "octave_window": config.octave_window_frames,
-            "max_gap_seconds": config.max_pitch_gap_seconds,
-            "sustain_confidence_threshold": config.pitch_sustain_confidence_threshold,
-        },
+        cleaning_parameters=config.cleaning_parameters(),
         pipeline_version=__version__,
     )
 

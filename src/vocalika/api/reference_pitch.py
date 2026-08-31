@@ -61,12 +61,7 @@ def build_reference_pitch(
         content_hash=asset.content_hash,
         cache=cache,
         extractor=extractor,
-        cleaning_parameters={
-            "confidence_threshold": config.pitch_confidence_threshold,
-            "octave_window": config.octave_window_frames,
-            "max_gap_seconds": config.max_pitch_gap_seconds,
-            "sustain_confidence_threshold": config.pitch_sustain_confidence_threshold,
-        },
+        cleaning_parameters=config.cleaning_parameters(),
         pipeline_version=__version__,
     )
     track = cached.track

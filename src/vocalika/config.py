@@ -38,5 +38,19 @@ class AnalysisConfig:
     stable_note_minimum_alignment_duration_ratio: float = 0.35
     stable_note_maximum_alignment_duration_ratio: float = 2.5
 
+    def cleaning_parameters(self) -> dict[str, Any]:
+        """The cleaning settings, as the pitch cache keys them.
+
+        Kept in one place because it is a cache key: any caller that builds
+        this dict by hand and forgets a field silently reads back a track
+        cleaned with different settings, reports a cache hit, and looks fine.
+        """
+        return {
+            "confidence_threshold": self.pitch_confidence_threshold,
+            "octave_window": self.octave_window_frames,
+            "max_gap_seconds": self.max_pitch_gap_seconds,
+            "sustain_confidence_threshold": self.pitch_sustain_confidence_threshold,
+        }
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
