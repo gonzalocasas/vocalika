@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="docs/logo-banner.png" width="720" alt="Vocalika — Vocal Training" />
+</p>
+
+<p align="center"><strong>Focused vocal training through measurable pitch and timing feedback.</strong></p>
+
 # Vocalika
 
 Vocalika is a web application for comparing a singer's performance with a

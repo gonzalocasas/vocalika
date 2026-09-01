@@ -274,7 +274,12 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
 <template>
   <div class="app-shell">
     <header class="top-bar">
-      <div><b>V</b><strong>VOCALIKA</strong><span>v0.4 / server workspace</span></div>
+      <div>
+        <a class="brand" href="/" aria-label="Vocalika home">
+          <img class="header-logo" src="/brand/header-logo.png" alt="Vocalika" />
+        </a>
+        <span>v0.4 / server workspace</span>
+      </div>
       <div><i></i><span>ENGINE READY</span></div>
     </header>
 
