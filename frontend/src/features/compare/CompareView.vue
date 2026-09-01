@@ -245,7 +245,7 @@ async function render(): Promise<void> {
   ], { ...base, height: 320, shapes: [cursorShape(playbackPosition.value)],
     // Cents on the left so the gap between the contours is the error the tiles
     // report; note names on the right so the pitches stay readable as music.
-    yaxis: { ...base.yaxis, title: { text: "Cents from C4  (100¢ = 1 semitone)" }, range: pitchRange, zeroline: false },
+    yaxis: { ...base.yaxis, title: { text: "Cents from C4" }, range: pitchRange, zeroline: false, tick0: ticks.tick0, dtick: ticks.dtick },
     yaxis2: { overlaying: "y", range: [-1.05, 1.05], visible: false, fixedrange: true },
     yaxis3: { overlaying: "y", side: "right" as const, range: pitchRange, tickvals: ticks.tickvals, ticktext: ticks.ticktext, showgrid: false, zeroline: false, tickfont: { color: "#7c817f" } },
   }, { responsive: true, displaylogo: false })

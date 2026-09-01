@@ -51,15 +51,23 @@ export function pitchExtent(series: Array<Array<number | null>>, paddingSemitone
   return { lowMidi: low, highMidi: high }
 }
 
-// Steps that land on musically meaningful intervals: semitone, tone, minor
-// third, major third, fifth, octave. A step of five semitones would put ticks
-// on notes with no relationship to each other.
-const TICK_STEPS = [1, 2, 3, 4, 6, 12]
+// Largest first, because the octave is the interval that reads: every label is
+// the same letter, and 1200 cents is the natural unit of the scale. Smaller
+// steps are only for views too narrow to fit octaves. A tritone step is
+// excluded deliberately -- it alternates C and F# forever, which looks
+// regular but tells you nothing.
+const TICK_STEPS = [12, 4, 3, 2, 1]
 
 export interface NoteTicks {
   /** Positions in cents, matching the axis the notes are drawn against. */
   tickvals: number[]
   ticktext: string[]
+  /** The interval chosen, in semitones -- an octave is 12. */
+  stepSemitones: number
+  /** First tick, in cents, for a gridline that starts where the labels do. */
+  tick0: number
+  /** Gridline spacing, in cents. */
+  dtick: number
 }
 
 /**
@@ -70,11 +78,12 @@ export interface NoteTicks {
  */
 export function noteTicks(
   { lowMidi, highMidi }: PitchExtent,
-  maximumTicks = 14,
+  minimumTicks = 3,
 ): NoteTicks {
   const span = Math.max(0, highMidi - lowMidi)
-  const step =
-    TICK_STEPS.find((candidate) => span / candidate <= maximumTicks) ?? TICK_STEPS[TICK_STEPS.length - 1]
+  // The widest interval that still puts enough lines on the chart to read a
+  // scale from. Taking the largest keeps the tick count low by construction.
+  const step = TICK_STEPS.find((candidate) => span / candidate >= minimumTicks) ?? 1
 
   const tickvals: number[] = []
   const ticktext: string[] = []
@@ -85,5 +94,14 @@ export function noteTicks(
     tickvals.push(midiToCents(midi))
     ticktext.push(noteName(midi))
   }
-  return { tickvals, ticktext }
+  // The cents axis is given the same interval, so its gridlines fall on the
+  // notes named opposite rather than on round numbers like 1000 cents, which
+  // correspond to nothing musical.
+  return {
+    tickvals,
+    ticktext,
+    stepSemitones: step,
+    tick0: midiToCents(first),
+    dtick: step * 100,
+  }
 }

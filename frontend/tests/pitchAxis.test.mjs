@@ -54,8 +54,15 @@ test("note ticks are placed in cents and named", () => {
 test("the step widens with the span so labels never collide", () => {
   for (const [low, high] of [[59, 62], [48, 72], [36, 84], [24, 96]]) {
     const ticks = noteTicks({ lowMidi: low, highMidi: high })
-    assert.ok(ticks.tickvals.length <= 14, `${high - low} semitones gave ${ticks.tickvals.length} ticks`)
+    assert.ok(ticks.tickvals.length <= 16, `${high - low} semitones gave ${ticks.tickvals.length} ticks`)
     assert.ok(ticks.tickvals.length >= 2, "there must be enough ticks to read the scale")
+  }
+})
+
+test("a tritone step is never chosen", () => {
+  // It alternates C and F# forever: regular, and completely uninformative.
+  for (let span = 2; span <= 90; span += 1) {
+    assert.notEqual(noteTicks({ lowMidi: 48, highMidi: 48 + span }).stepSemitones, 6)
   }
 })
 
@@ -80,3 +87,31 @@ function noteNameFor(midi) {
   const nearest = Math.round(midi)
   return `${names[((nearest % 12) + 12) % 12]}${Math.floor(nearest / 12) - 1}`
 }
+
+test("the cents axis is stepped in musical intervals, not round numbers", () => {
+  // An octave is 1200 cents; 1000 corresponds to nothing.
+  const wide = noteTicks({ lowMidi: 40, highMidi: 80 })
+  assert.equal(wide.dtick, wide.stepSemitones * 100)
+  assert.ok([100, 200, 300, 400, 600, 1200].includes(wide.dtick), `got ${wide.dtick}`)
+})
+
+test("both axes share one step so gridlines meet their note names", () => {
+  for (const [low, high] of [[57, 62], [48, 72], [40, 80], [24, 96]]) {
+    const ticks = noteTicks({ lowMidi: low, highMidi: high })
+    assert.equal(ticks.tick0, ticks.tickvals[0], "the grid starts where the labels do")
+    ticks.tickvals.forEach((value, index) => {
+      assert.equal(value, ticks.tick0 + index * ticks.dtick, "labels sit on gridlines")
+    })
+  }
+})
+
+test("a wide view is stepped by the octave, and every label is a C", () => {
+  for (const [low, high] of [[36, 96], [40, 80], [45, 84]]) {
+    const ticks = noteTicks({ lowMidi: low, highMidi: high })
+    assert.equal(ticks.dtick, 1200, `${high - low} semitones did not use the octave`)
+    assert.ok(
+      ticks.ticktext.every((name) => name.startsWith("C") && !name.startsWith("C#")),
+      ticks.ticktext.join(" "),
+    )
+  }
+})
