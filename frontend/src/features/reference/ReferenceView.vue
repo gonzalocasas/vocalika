@@ -273,7 +273,7 @@ onBeforeUnmount(stop)
         <div class="transpose-value">{{ transpose >= 0 ? "+" : "" }}{{ transpose }} <small>SEMI</small></div>
         <div class="transpose-grid">
           <button
-            v-for="step in [-4,-3,-2,-1,0,1,2,3,4]"
+            v-for="step in [-5,-4,-3,-2,-1,0,1,2,3,4]"
             :key="step"
             :class="{ active: transpose === step }"
             @click="transpose = step; saveTranspose()"
