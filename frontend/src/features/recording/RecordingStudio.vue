@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, toRef, watch } from "vue"
 
 import { apiJson } from "../../shared/api"
 import type { Project } from "../../shared/types"
@@ -7,6 +7,8 @@ import PitchRibbon from "./PitchRibbon.vue"
 import type { ReferenceContour } from "./pitchRibbon"
 import { referenceMidiAt } from "./pitchRibbon"
 import { createScrollProgress, easeToward } from "./lyricsScroll"
+import TimedLyrics from "../reference/TimedLyrics.vue"
+import { useLyricsTiming } from "../reference/useLyricsTiming"
 import { useLivePitch } from "./useLivePitch"
 import { useMicrophoneRecorder } from "./useMicrophoneRecorder"
 
@@ -78,6 +80,13 @@ const liveCents = computed(() => {
   return target === null ? null : Math.round((sample.midi - target) * 100)
 })
 
+const {
+  lines: timedLines,
+  activeLine,
+  activeWord,
+  lineScrollTarget,
+} = useLyricsTiming(toRef(props, "project"), lyrics, monitorTime)
+
 const scrollProgress = computed(() =>
   createScrollProgress(contour.value, props.project.trim_start_seconds, referenceEnd()),
 )
@@ -93,10 +102,17 @@ function scrollLoop(timestamp: number): void {
   const element = lyricsView.value
   const delta = lastFrameAt ? Math.min(100, timestamp - lastFrameAt) : 16
   lastFrameAt = timestamp
+  // The live-pitch callback only ticks while there is input to analyse; the
+  // highlight has to move every frame the backing track does.
+  const clockSource = vocalAudio.value ?? instrumentalAudio.value
+  if (recording.value && clockSource) monitorTime.value = clockSource.currentTime
   if (element && autoScroll.value && inTake.value && timestamp >= suspendScrollUntil) {
     const range = element.scrollHeight - element.clientHeight
-    if (range > 4) {
-      const target = scrollProgress.value.at(monitorTime.value) * range
+    const wanted = timedLines.value
+      ? lineScrollTarget(element)
+      : scrollProgress.value.at(monitorTime.value) * range
+    if (range > 4 && wanted !== null) {
+      const target = Math.max(0, Math.min(range, wanted))
       const from = Number.isFinite(easedScrollTop) ? easedScrollTop : element.scrollTop
       easedScrollTop = easeToward(from, target, delta)
       element.scrollTop = easedScrollTop
@@ -275,7 +291,9 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
             type="button"
             class="tool-button"
             :class="{ armed: autoScroll }"
-            :title="scrollProgress.usesVoicedTime
+            :title="timedLines
+              ? 'Follows the lyric timings measured on the reference vocal'
+              : scrollProgress.usesVoicedTime
               ? 'Follows the reference vocal, so the page waits through instrumental sections'
               : 'No reference contour, so the page follows elapsed time'"
             @click="autoScroll = !autoScroll"
@@ -295,6 +313,16 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
             placeholder="Paste the song lyrics here…"
             @blur="emit('updateLyrics', lyrics)"
           ></textarea>
+          <div
+            v-else-if="timedLines"
+            ref="lyricsView"
+            class="lyrics-read lyrics-timed"
+            :style="{ fontSize: lyricsFontSize }"
+            @wheel="noteManualScroll"
+            @touchmove="noteManualScroll"
+          >
+            <TimedLyrics :lines="timedLines" :active-line="activeLine" :active-word="activeWord" />
+          </div>
           <div
             v-else-if="lyrics.trim()"
             ref="lyricsView"

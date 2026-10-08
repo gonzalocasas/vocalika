@@ -34,6 +34,10 @@ dev = [
 real-input = [
   "demucs>=4.0.1,<5",
   "numpy>=1.26,<2",
+  # The MMS forced aligner that times lyrics. torchaudio is built against one
+  # exact torch release, so this moves in lockstep with the torch in uv.lock;
+  # releases from 2.9 on also drop forced_align.
+  "torchaudio==2.2.2",
   "yt-dlp>=2025.1.1",
 ]
 
@@ -63,5 +67,5 @@ strict = true
 packages = ["vocalika"]
 
 [[tool.mypy.overrides]]
-module = ["plotly", "plotly.*", "scipy", "scipy.*", "soundfile"]
+module = ["plotly", "plotly.*", "scipy", "scipy.*", "soundfile", "torchaudio", "torchaudio.*"]
 ignore_missing_imports = true

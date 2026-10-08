@@ -154,6 +154,11 @@ def setup_models() -> None:
     typer.echo("Downloading the htdemucs source-separation model if needed…")
     get_model("htdemucs")
     typer.echo("Model ready: htdemucs")
+    from torchaudio.pipelines import MMS_FA
+
+    typer.echo("Downloading the MMS lyric-alignment model if needed…")
+    MMS_FA.get_model(with_star=True)
+    typer.echo("Model ready: MMS forced aligner")
 
 
 @app.command("cache-path")

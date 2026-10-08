@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue"
+import { computed, onBeforeUnmount, ref, toRef, watch } from "vue"
 
 import { apiJson } from "../../shared/api"
 import { transposedRange, type VocalRange } from "../../shared/notes"
+import { createScrollProgress, easeToward, type ProgressContour } from "../recording/lyricsScroll"
+import { jumpTime } from "./lyricsTiming"
+import TimedLyrics from "./TimedLyrics.vue"
+import { useLyricsTiming } from "./useLyricsTiming"
 import { seekTimeAt } from "./seek"
 import type { Project, WaveformEnvelope } from "../../shared/types"
 
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{
-  update: [settings: Partial<Pick<Project, "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones">>]
+  update: [settings: Partial<Pick<Project, "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones" | "lyrics">>]
 }>()
 
 const stem = ref<"vocal" | "instrumental" | "mix">("vocal")
@@ -27,21 +31,135 @@ let animationFrame: number | undefined
 let scrubbing = false
 
 const referenceRange = ref<VocalRange | null>(null)
+const contour = ref<ProgressContour | null>(null)
 // Transposition shifts every pitch equally, so the displayed range follows the
 // buttons instantly instead of waiting on a re-measure per semitone.
 const sungRange = computed(() => transposedRange(referenceRange.value, transpose.value))
 
 async function loadRange(): Promise<void> {
   try {
-    const payload = await apiJson<{ range: VocalRange | null }>(
+    const payload = await apiJson<ProgressContour & { range: VocalRange | null }>(
       `/api/projects/${props.project.id}/reference/pitch`,
     )
     referenceRange.value = payload.range
+    contour.value = payload
   } catch {
     referenceRange.value = null
+    contour.value = null
   }
 }
 void loadRange()
+
+const lyrics = ref(props.project.lyrics)
+const editingLyrics = ref(false)
+const lyricsView = ref<HTMLElement | null>(null)
+let lastFrameAt = 0
+let suspendFollowUntil = 0
+let easedScrollTop = Number.NaN
+
+// Voiced frames do not move with transposition, so the untransposed contour
+// paces the lyric just as well as the key being played.
+const scrollProgress = computed(() => createScrollProgress(contour.value, trimStart.value, trimEnd.value))
+
+const {
+  lines: timedLines,
+  activeLine,
+  activeWord,
+  label: timingLabel,
+  lineScrollTarget,
+} = useLyricsTiming(toRef(props, "project"), lyrics, playhead)
+
+/** Play from a clicked line or word, whatever the transport was doing. */
+async function playFrom(start: number | null): Promise<void> {
+  if (start === null) return
+  suspendFollowUntil = 0
+  easedScrollTop = Number.NaN
+  const time = jumpTime(start)
+  if (playing.value) {
+    seekTo(time)
+    return
+  }
+  await startAudio(time)
+}
+
+/** Where to scroll so the sung line sits a third of the way down the panel. */
+function followTarget(element: HTMLElement): number | null {
+  if (timedLines.value) return lineScrollTarget(element)
+  return scrollProgress.value.at(playhead.value) * (element.scrollHeight - element.clientHeight)
+}
+
+/**
+ * Keep the sung line in view while the reference plays.
+ *
+ * With word timings the panel follows the actual line; without them it falls
+ * back to the studio's voiced-time estimate.
+ */
+function followLyrics(timestamp: number): void {
+  const delta = lastFrameAt ? Math.min(100, timestamp - lastFrameAt) : 16
+  lastFrameAt = timestamp
+  const element = lyricsView.value
+  if (!element || timestamp < suspendFollowUntil) return
+  const range = element.scrollHeight - element.clientHeight
+  if (range <= 4) return
+  const wanted = followTarget(element)
+  if (wanted === null) return
+  const target = Math.max(0, Math.min(range, wanted))
+  const from = Number.isFinite(easedScrollTop) ? easedScrollTop : element.scrollTop
+  easedScrollTop = easeToward(from, target, delta)
+  element.scrollTop = easedScrollTop
+}
+
+/** Reading ahead should not mean fighting the page back. */
+function noteManualScroll(): void {
+  suspendFollowUntil = performance.now() + 4000
+  easedScrollTop = Number.NaN
+}
+
+function finishEditingLyrics(): void {
+  editingLyrics.value = false
+  if (lyrics.value !== props.project.lyrics) emit("update", { lyrics: lyrics.value })
+}
+
+interface LyricsCandidate {
+  id: number
+  track: string
+  artist: string
+  album: string | null
+  duration_seconds: number | null
+  lyrics: string
+}
+
+const candidates = ref<LyricsCandidate[] | null>(null)
+const searching = ref(false)
+const searchError = ref("")
+
+async function findLyrics(): Promise<void> {
+  searching.value = true
+  searchError.value = ""
+  try {
+    const payload = await apiJson<{ candidates: LyricsCandidate[] }>(
+      `/api/projects/${props.project.id}/lyrics/search`,
+    )
+    candidates.value = payload.candidates
+    if (!payload.candidates.length) searchError.value = "LRCLIB has no lyrics for this title."
+  } catch (error) {
+    candidates.value = null
+    searchError.value = error instanceof Error ? error.message : "Lyrics search failed."
+  } finally {
+    searching.value = false
+  }
+}
+
+function useCandidate(candidate: LyricsCandidate): void {
+  if (
+    props.project.lyrics.trim()
+    && !window.confirm("Replace this project's lyrics with the ones from LRCLIB?")
+  ) return
+  lyrics.value = candidate.lyrics
+  candidates.value = null
+  editingLyrics.value = false
+  emit("update", { lyrics: candidate.lyrics })
+}
 
 const duration = computed(() => props.project.reference.duration_seconds)
 const selectionDuration = computed(() => Math.max(0, trimEnd.value - trimStart.value))
@@ -83,6 +201,8 @@ function holdTransport(): void {
   instrumentalAudio.value?.pause()
   if (animationFrame !== undefined) cancelAnimationFrame(animationFrame)
   animationFrame = undefined
+  lastFrameAt = 0
+  easedScrollTop = Number.NaN
 }
 
 /** Hold position so playback can pick up where it left off. */
@@ -106,6 +226,7 @@ function updatePlayhead(): void {
     stop()
     return
   }
+  followLyrics(performance.now())
   animationFrame = requestAnimationFrame(updatePlayhead)
 }
 
@@ -198,7 +319,9 @@ watch(() => props.project, (project) => {
   trimStart.value = project.trim_start_seconds
   trimEnd.value = project.trim_end_seconds ?? project.reference.duration_seconds
   transpose.value = project.transpose_semitones
+  if (!editingLyrics.value) lyrics.value = project.lyrics
 })
+
 void loadWaveform()
 onBeforeUnmount(stop)
 </script>
@@ -265,6 +388,84 @@ onBeforeUnmount(stop)
         preload="metadata"
         :src="`/api/projects/${project.id}/audio/instrumental?v=${project.updated_at}&transpose=${transpose}`"
       ></audio>
+    </section>
+
+    <section class="feature-panel reference-lyrics">
+      <div class="feature-heading">
+        <div>
+          <p class="mono-eyebrow accent-text">LYRICS <span v-if="timingLabel" class="lyrics-timing-state">· {{ timingLabel }}</span></p>
+          <h2>Sing along</h2>
+        </div>
+        <div class="lyrics-tools">
+          <button
+            type="button"
+            class="tool-button"
+            :disabled="searching || editingLyrics"
+            @click="findLyrics"
+          >{{ searching ? "SEARCHING…" : "FIND LYRICS" }}</button>
+          <button
+            type="button"
+            class="tool-button"
+            @click="editingLyrics ? finishEditingLyrics() : (editingLyrics = true)"
+          >{{ editingLyrics ? "DONE" : "EDIT LYRICS" }}</button>
+        </div>
+      </div>
+
+      <div v-if="candidates?.length" class="lyrics-candidates">
+        <div class="lyrics-candidates-heading">
+          <span>FROM LRCLIB</span>
+          <button type="button" class="tool-button" @click="candidates = null">CANCEL</button>
+        </div>
+        <button
+          v-for="candidate in candidates"
+          :key="candidate.id"
+          type="button"
+          class="lyrics-candidate"
+          @click="useCandidate(candidate)"
+        >
+          <strong>{{ candidate.track }}</strong>
+          <span>{{ candidate.artist }}<template v-if="candidate.album"> · {{ candidate.album }}</template></span>
+          <small>
+            <template v-if="candidate.duration_seconds">{{ formatTime(candidate.duration_seconds) }} · </template>{{ candidate.lyrics.split("\n")[0] }}…
+          </small>
+        </button>
+      </div>
+      <p v-else-if="searchError" class="feature-note lyrics-search-error">{{ searchError }}</p>
+
+      <textarea
+        v-if="editingLyrics"
+        v-model="lyrics"
+        class="lyrics-editor"
+        placeholder="Paste the song lyrics here…"
+        @blur="finishEditingLyrics"
+      ></textarea>
+      <div
+        v-else-if="timedLines"
+        ref="lyricsView"
+        class="lyrics-read lyrics-timed"
+        @wheel="noteManualScroll"
+        @touchmove="noteManualScroll"
+      >
+        <TimedLyrics
+          :lines="timedLines"
+          :active-line="activeLine"
+          :active-word="activeWord"
+          interactive
+          @play="playFrom"
+        />
+      </div>
+      <div
+        v-else-if="lyrics.trim()"
+        ref="lyricsView"
+        class="lyrics-read"
+        @wheel="noteManualScroll"
+        @touchmove="noteManualScroll"
+      >{{ lyrics }}</div>
+      <p v-else class="lyrics-empty">
+        No lyrics yet. <b>FIND LYRICS</b> looks them up on LRCLIB, or <b>EDIT LYRICS</b>
+        to paste them in. Once saved they are timed to the reference vocal, and
+        any line or word plays the song from there.
+      </p>
     </section>
 
     <aside class="feature-sidebar">

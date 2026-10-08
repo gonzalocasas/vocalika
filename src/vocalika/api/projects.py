@@ -8,11 +8,13 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
+from vocalika.api.lyrics import build_lyrics_timing
 from vocalika.api.practice import build_practice_plan, score_attempt
 from vocalika.api.reference_pitch import build_reference_pitch
 from vocalika.api.uploads import safe_upload_name, save_upload
 from vocalika.api.waveform import build_aligned_waveforms, build_waveform_envelope
 from vocalika.audio.sources import LocalAudioSource
+from vocalika.lyrics.lrclib import LyricsLookupError, search_lyrics
 from vocalika.models.artifact import load_artifact
 from vocalika.projects.export import (
     ChannelLayout,
@@ -259,6 +261,35 @@ def create_projects_router(service: ProjectService) -> APIRouter:
                 service.cache,
                 transpose,
             )
+        except (OSError, RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+    @router.get("/{project_id}/lyrics/search")
+    async def lyrics_search(project_id: str, q: str | None = None) -> dict[str, Any]:
+        """Candidate lyrics from LRCLIB, searched by the project title by default."""
+        try:
+            project = service.repository.load(project_id)
+        except ProjectNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        try:
+            candidates = await run_in_threadpool(
+                search_lyrics,
+                q or project.title,
+                project.reference.duration_seconds,
+            )
+        except LyricsLookupError as error:
+            raise HTTPException(status_code=502, detail=str(error)) from error
+        return {"candidates": [candidate.to_dict() for candidate in candidates]}
+
+    @router.get("/{project_id}/lyrics/timing")
+    async def lyrics_timing(project_id: str) -> dict[str, Any]:
+        """When each word of the project's lyrics is sung in the reference."""
+        try:
+            project = service.repository.load(project_id)
+        except ProjectNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        try:
+            return await run_in_threadpool(build_lyrics_timing, project, service.cache)
         except (OSError, RuntimeError, ValueError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 

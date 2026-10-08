@@ -36,3 +36,7 @@ class CacheManager:
     def pitch_path(self, content_hash: str, parameters: dict[str, Any]) -> Path:
         key = stable_hash({"content_hash": content_hash, **parameters})
         return self.root / "pitch" / f"{key}.npz"
+
+    def lyrics_timing_path(self, content_hash: str, parameters: dict[str, Any]) -> Path:
+        key = stable_hash({"content_hash": content_hash, **parameters})
+        return self.root / "lyrics" / f"{key}.json"
