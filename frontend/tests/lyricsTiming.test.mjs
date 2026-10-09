@@ -35,6 +35,15 @@ test("timing only applies to the text it was measured for", () => {
   assert.equal(timingMatches(null, ""), false)
 })
 
+test("a trailing newline does not stop timing from applying", () => {
+  // The server splits with Python's splitlines(), which drops the empty line
+  // after a final newline; the browser keeps it.
+  assert.equal(timingMatches(timing, "[Chorus]\nOne two\n\nThree four\n"), true)
+  assert.equal(timingMatches(timing, "[Chorus]\nOne two\n\nThree four\n\n\n"), true)
+  const withBlankTail = { ...timing, lines: [...lines, line("", [])] }
+  assert.equal(timingMatches(withBlankTail, "[Chorus]\nOne two\n\nThree four"), true)
+})
+
 test("the active line is the last one started, held through a break", () => {
   assert.equal(activeLineIndex(lines, 0.5), -1)
   assert.equal(activeLineIndex(lines, 1), 1)

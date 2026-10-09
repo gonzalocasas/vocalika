@@ -34,9 +34,18 @@ export interface LyricsTiming {
  */
 export function timingMatches(timing: LyricsTiming | null, lyrics: string): timing is LyricsTiming {
   if (!timing) return false
-  const lines = lyrics.split(/\r?\n/)
-  return timing.lines.length === lines.length
-    && timing.lines.every((line, index) => line.text === lines[index].trim())
+  // Trailing blank lines are ignored on both sides: Python's splitlines()
+  // drops the empty line after a final newline, while split() keeps it, so
+  // lyrics ending in a newline would otherwise never match their timing.
+  const typed = withoutTrailingBlanks(lyrics.split(/\r?\n/).map((line) => line.trim()))
+  const timed = withoutTrailingBlanks(timing.lines.map((line) => line.text))
+  return timed.length === typed.length && timed.every((text, index) => text === typed[index])
+}
+
+function withoutTrailingBlanks(lines: string[]): string[] {
+  let end = lines.length
+  while (end > 0 && lines[end - 1] === "") end -= 1
+  return lines.slice(0, end)
 }
 
 /**
