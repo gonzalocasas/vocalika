@@ -492,6 +492,7 @@
     "pitch_frame_length": 2048,
     "pitch_harmonic_margin": 1.0,
     "pitch_hop_length": 256,
+    "pitch_level_floor_db": 40.0,
     "pitch_max_midi": 84.0,
     "pitch_min_midi": 36.0,
     "pitch_sustain_confidence_threshold": 0.2,

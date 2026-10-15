@@ -90,11 +90,7 @@ def score_held_note(
     """
     config = config or AnalysisConfig()
     track = clean_pitch_track(
-        _config_extractor(config).extract(audio_path),
-        confidence_threshold=config.pitch_confidence_threshold,
-        octave_window=config.octave_window_frames,
-        max_gap_seconds=config.max_pitch_gap_seconds,
-        sustain_confidence_threshold=config.pitch_sustain_confidence_threshold,
+        _config_extractor(config).extract(audio_path), **config.cleaning_parameters()
     )
 
     midi = np.asarray(track.midi, dtype=np.float64)
@@ -161,11 +157,7 @@ def score_interval(
     """
     config = config or AnalysisConfig()
     track = clean_pitch_track(
-        _config_extractor(config).extract(audio_path),
-        confidence_threshold=config.pitch_confidence_threshold,
-        octave_window=config.octave_window_frames,
-        max_gap_seconds=config.max_pitch_gap_seconds,
-        sustain_confidence_threshold=config.pitch_sustain_confidence_threshold,
+        _config_extractor(config).extract(audio_path), **config.cleaning_parameters()
     )
     midi = np.asarray(track.midi, dtype=np.float64)
     voiced_index = np.flatnonzero(np.isfinite(midi))

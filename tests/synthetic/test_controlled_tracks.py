@@ -271,6 +271,34 @@ def test_frames_below_the_sustain_floor_are_still_dropped() -> None:
     assert not np.isfinite(cleaned.midi[silence]).any()
 
 
+def test_drops_confident_pitch_far_below_the_singing_level() -> None:
+    """Accompaniment bleeding into a vocal stem is periodic, not sung.
+
+    On real separations a piano intro left in the stem at -70 dB came back
+    from pyin as a confident melody, drawn as though the singer had started.
+    """
+    track = make_track()
+    track.level_db = np.full(track.times.size, -18.0)
+    bleed = slice(0, 120)
+    track.level_db[bleed] = -88.0
+
+    cleaned = clean_pitch_track(track)
+
+    assert not np.isfinite(cleaned.midi[bleed]).any()
+    assert np.isfinite(cleaned.midi[200:]).mean() > 0.9
+
+
+def test_keeps_quiet_singing_within_the_level_floor() -> None:
+    track = make_track()
+    track.level_db = np.full(track.times.size, -18.0)
+    soft = slice(300, 380)
+    track.level_db[soft] = -50.0
+
+    cleaned = clean_pitch_track(track)
+
+    assert np.isfinite(cleaned.midi[soft]).all()
+
+
 def test_stable_pitch_centers_recover_global_shift() -> None:
     alignment = align_pitch_tracks(make_track(), make_track(pitch_shift=0.5))
     comparison = compare_alignment(alignment)

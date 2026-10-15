@@ -34,17 +34,38 @@ def _sustained(
     return kept
 
 
+def _loud_enough(track: PitchTrack, candidate: BoolArray, floor_db: float) -> BoolArray:
+    """Frames no quieter than ``floor_db`` below the track's own singing level.
+
+    Separation leaves faint traces of the accompaniment in a vocal stem --
+    often 60 dB or more below the voice, and inaudible -- and a piano note is
+    as periodic as a sung one, so pyin reports it with full confidence. The
+    level is judged against the track itself (the 90th percentile of its
+    confident frames) rather than an absolute dBFS figure, so a quietly
+    recorded take is held to its own loudness, not the reference's.
+    """
+    if track.level_db is None or track.level_db.size != candidate.size:
+        return np.ones(candidate.size, dtype=bool)
+    if not candidate.any():
+        return np.ones(candidate.size, dtype=bool)
+    singing_level = float(np.percentile(track.level_db[candidate], 90))
+    return np.asarray(track.level_db >= singing_level - floor_db, dtype=bool)
+
+
 def clean_pitch_track(
     track: PitchTrack,
     confidence_threshold: float = 0.55,
     octave_window: int = 9,
     max_gap_seconds: float = 0.08,
     sustain_confidence_threshold: float = 0.20,
+    level_floor_db: float = 40.0,
 ) -> PitchTrack:
-    """Filter uncertain frames, repair obvious octave jumps, and fill tiny gaps."""
+    """Filter uncertain or inaudible frames, repair octave jumps, and fill tiny gaps."""
     midi = track.raw_midi.copy()
+    confident = track.voiced & np.isfinite(midi) & (track.confidence >= confidence_threshold)
+    voiced = track.voiced & _loud_enough(track, confident, level_floor_db)
     reliable = np.isfinite(midi) & _sustained(
-        track.voiced,
+        voiced,
         track.confidence,
         confidence_threshold,
         min(sustain_confidence_threshold, confidence_threshold),
@@ -85,4 +106,5 @@ def clean_pitch_track(
         extractor=track.extractor,
         sample_rate=track.sample_rate,
         hop_length=track.hop_length,
+        level_db=track.level_db,
     )

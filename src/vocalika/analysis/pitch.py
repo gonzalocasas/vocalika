@@ -26,6 +26,11 @@ class PitchTrack:
     extractor: str
     sample_rate: int
     hop_length: int
+    # Frame loudness in dBFS, on the same frames as the pitch. pyin judges
+    # periodicity and not level, so cleaning needs this to tell a voice from
+    # faint accompaniment that separation left behind. None for tracks not
+    # measured from audio.
+    level_db: FloatArray | None = None
 
     @property
     def duration_seconds(self) -> float:
@@ -69,6 +74,11 @@ class PyinPitchExtractor:
         valid = np.isfinite(frequency) & (frequency > 0)
         raw_midi[valid] = 69.0 + 12.0 * np.log2(frequency[valid] / self.concert_pitch_hz)
         times = librosa.times_like(frequency, sr=sample_rate, hop_length=self.hop_length)
+        # Measured on the unfiltered audio, framed exactly as pyin frames it.
+        rms = librosa.feature.rms(
+            y=audio, frame_length=self.frame_length, hop_length=self.hop_length
+        )[0][: frequency.size]
+        level_db = 20.0 * np.log10(np.maximum(np.asarray(rms, dtype=np.float64), 1e-10))
         return PitchTrack(
             times=np.asarray(times, dtype=np.float64),
             raw_frequency_hz=frequency,
@@ -83,4 +93,5 @@ class PyinPitchExtractor:
             ),
             sample_rate=sample_rate,
             hop_length=self.hop_length,
+            level_db=level_db,
         )

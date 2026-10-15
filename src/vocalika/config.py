@@ -16,6 +16,9 @@ class AnalysisConfig:
     # See _sustained in analysis/cleaning.py.
     pitch_sustain_confidence_threshold: float = 0.20
     pitch_harmonic_margin: float = 1.0
+    # Frames this far below the track's singing level are not voice, whatever
+    # pyin says. See _loud_enough in analysis/cleaning.py.
+    pitch_level_floor_db: float = 40.0
     octave_window_frames: int = 9
     max_pitch_gap_seconds: float = 0.08
     alignment_frames_per_second: float = 10.0
@@ -50,6 +53,7 @@ class AnalysisConfig:
             "octave_window": self.octave_window_frames,
             "max_gap_seconds": self.max_pitch_gap_seconds,
             "sustain_confidence_threshold": self.pitch_sustain_confidence_threshold,
+            "level_floor_db": self.pitch_level_floor_db,
         }
 
     def to_dict(self) -> dict[str, Any]:

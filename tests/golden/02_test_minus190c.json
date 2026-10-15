@@ -72,7 +72,7 @@
         -190.00000000000057,
         -190.00000000000057,
         -190.00000000000057,
-        -184.999999999998
+        -189.99999999999915
       ],
       "confidence": [
         0.7571601330199095,
@@ -180,7 +180,7 @@
         65.1,
         65.1,
         65.1,
-        65.25000000000001
+        65.2
       ],
       "performance_time": [
         0.0,
@@ -432,7 +432,7 @@
         0.0,
         0.0,
         0.0,
-        5.000000000002558
+        1.4210854715202004e-12
       ],
       "valid": [
         true,
@@ -475,9 +475,9 @@
     "summary": {
       "global_bias_cents": -190.00000000000057,
       "matched_seconds": 3.3,
-      "mean_absolute_error_cents": 190.15151515151547,
+      "mean_absolute_error_cents": 190.30303030303065,
       "median_absolute_error_cents": 190.00000000000057,
-      "relative_mean_absolute_error_cents": 0.4545454545457086,
+      "relative_mean_absolute_error_cents": 0.30303030303052264,
       "relative_median_absolute_error_cents": 0.0,
       "relative_stable_note_duration_weighted_mae_cents": null,
       "relative_stable_note_pitch_center_mae_cents": null,
@@ -514,6 +514,7 @@
     "pitch_frame_length": 2048,
     "pitch_harmonic_margin": 1.0,
     "pitch_hop_length": 256,
+    "pitch_level_floor_db": 40.0,
     "pitch_max_midi": 84.0,
     "pitch_min_midi": 36.0,
     "pitch_sustain_confidence_threshold": 0.2,

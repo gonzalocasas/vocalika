@@ -52,6 +52,7 @@ def extract_clean_pitch(
                     extractor=str(arrays["extractor"].item()),
                     sample_rate=int(arrays["sample_rate"].item()),
                     hop_length=int(arrays["hop_length"].item()),
+                    level_db=arrays.get("level_db"),
                 ),
                 cache_hit=True,
             )
@@ -69,5 +70,6 @@ def extract_clean_pitch(
         extractor=track.extractor,
         sample_rate=track.sample_rate,
         hop_length=track.hop_length,
+        **({} if track.level_db is None else {"level_db": track.level_db}),
     )
     return CachedPitchTrack(track, cache_hit=False)
