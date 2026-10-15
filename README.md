@@ -138,6 +138,18 @@ reference is already an isolated vocal. Downloads, stems, pitch tracks and
 lyric timings are cached by content; `vocalika cache-path` shows where, and
 `vocalika cache-clear` empties it.
 
+After an update that changes how Vocalika measures, bring saved projects up to
+date — the reference pitch and every take, compared against each song's
+current melody voice:
+
+```bash
+uv run vocalika reanalyze                      # every project
+uv run vocalika reanalyze --project "rasguña"  # one, by id or part of its title
+```
+
+A single take can also be re-analysed from its **RE-ANALYZE** button, which
+lights up when the song's melody voice has changed since the take was analysed.
+
 ## Development
 
 ```bash

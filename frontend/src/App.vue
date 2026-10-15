@@ -25,6 +25,7 @@ const {
   updateProject,
   addTake,
   deleteTake,
+  reanalyzeTake,
   loadAnalysis,
 } = useProjects()
 const initialRoute = parseAppRoute(window.location.pathname)
@@ -185,6 +186,16 @@ async function handleDeleteTake(take: Take): Promise<void> {
       )?.id ?? null
       artifact.value = null
     }
+  } catch {
+    // useProjects exposes the user-facing error.
+  }
+}
+
+async function handleReanalyzeTake(take: Take): Promise<void> {
+  if (!selectedProject.value) return
+  try {
+    const result = await reanalyzeTake(selectedProject.value.id, take.id)
+    if (selectedTakeId.value === take.id) artifact.value = result.artifact
   } catch {
     // useProjects exposes the user-facing error.
   }
@@ -352,6 +363,7 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
           @submit="handleTake"
           @select="selectTake"
           @delete="handleDeleteTake"
+          @reanalyze="handleReanalyzeTake"
           @update-lyrics="(lyrics) => handleUpdate({ lyrics })"
         />
         <CompareView

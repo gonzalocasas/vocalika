@@ -91,6 +91,30 @@ export function useProjects() {
     }
   }
 
+  /** Analyse an existing take again, against the project's current settings. */
+  async function reanalyzeTake(
+    projectId: string,
+    takeId: string,
+  ): Promise<{ project: Project; take: Take; artifact: AnalysisArtifact }> {
+    busy.value = true
+    error.value = ""
+    try {
+      const payload = await apiJson<{ project: Project; take: Take; artifact: AnalysisArtifact }>(
+        `/api/projects/${projectId}/takes/${takeId}/analyze`,
+        { method: "POST" },
+      )
+      projects.value = projects.value.map((project) =>
+        project.id === projectId ? payload.project : project,
+      )
+      return payload
+    } catch (reason) {
+      error.value = reason instanceof Error ? reason.message : String(reason)
+      throw reason
+    } finally {
+      busy.value = false
+    }
+  }
+
   async function loadAnalysis(projectId: string, takeId: string): Promise<AnalysisArtifact> {
     const payload = await apiJson<{ artifact: AnalysisArtifact }>(
       `/api/projects/${projectId}/takes/${takeId}/analysis`,
@@ -132,6 +156,7 @@ export function useProjects() {
     updateProject,
     addTake,
     deleteTake,
+    reanalyzeTake,
     loadAnalysis,
   }
 }

@@ -5,11 +5,12 @@ import RecordingStudio from "../recording/RecordingStudio.vue"
 import type { Project, Take } from "../../shared/types"
 import TakeWaveform from "./TakeWaveform.vue"
 
-defineProps<{ project: Project; busy: boolean; selectedTakeId: string | null }>()
+const props = defineProps<{ project: Project; busy: boolean; selectedTakeId: string | null }>()
 const emit = defineEmits<{
   submit: [file: File, isolate: boolean]
   select: [take: Take]
   delete: [take: Take]
+  reanalyze: [take: Take]
   updateLyrics: [lyrics: string]
 }>()
 
@@ -28,6 +29,11 @@ function submitUpload(): void {
 function takeDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" })
     .format(new Date(value)).toUpperCase()
+}
+
+/** Analysed against a melody voice other than the one now chosen. */
+function voiceChanged(take: Take): boolean {
+  return take.status === "analyzed" && (take.reference_voice ?? "louder") !== props.project.reference_voice
 }
 
 function requestDelete(take: Take): void {
@@ -60,14 +66,28 @@ function requestDelete(take: Take): void {
           <TakeWaveform :project-id="project.id" :take-id="take.id" :active="selectedTakeId === take.id" />
           <div class="take-mae"><span>MAE</span><strong>{{ take.analysis_summary ? `${take.analysis_summary.mean_absolute_error_cents.toFixed(0)}¢` : "—" }}</strong></div>
         </button>
-        <button
-          class="take-delete"
-          :disabled="busy"
-          :aria-label="`Delete ${take.name}`"
-          @click="requestDelete(take)"
-        >
-          DELETE
-        </button>
+        <div class="take-actions">
+          <button
+            class="take-reanalyze"
+            :class="{ stale: voiceChanged(take) }"
+            :disabled="busy"
+            :title="voiceChanged(take)
+              ? `Analysed against the ${take.reference_voice ?? 'louder'} voice; the song now follows the ${project.reference_voice}`
+              : 'Analyse again with the current settings'"
+            :aria-label="`Re-analyze ${take.name}`"
+            @click="emit('reanalyze', take)"
+          >
+            RE-ANALYZE
+          </button>
+          <button
+            class="take-delete"
+            :disabled="busy"
+            :aria-label="`Delete ${take.name}`"
+            @click="requestDelete(take)"
+          >
+            DELETE
+          </button>
+        </div>
       </article>
       <p v-if="!project.takes.length" class="empty-copy">Upload or record your first take. It will stay grouped with this reference.</p>
     </section>

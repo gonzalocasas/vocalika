@@ -142,6 +142,80 @@ def serve(
     )
 
 
+@app.command()
+def reanalyze(
+    project: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--project",
+            "-p",
+            help="Project id, or part of its title. Repeat for several; omit for all.",
+        ),
+    ] = None,
+    analyses_directory: Annotated[
+        Path,
+        typer.Option(file_okay=False, help="Root folder holding the projects."),
+    ] = Path("analysis-output"),
+    cache_directory: Annotated[
+        Path | None,
+        typer.Option(file_okay=False, help="Cache shared with the web UI."),
+    ] = None,
+) -> None:
+    """Recompute projects with the current pipeline: reference pitch and every take.
+
+    Each take is compared against the project's current melody voice and the
+    key it was recorded in. A take that fails is reported and skipped.
+    """
+    from vocalika.api.reference_pitch import build_reference_pitch
+    from vocalika.projects.repository import ProjectRepository
+    from vocalika.projects.service import ProjectService
+
+    repository = ProjectRepository((analyses_directory / "projects").expanduser().resolve())
+    cache = (
+        CacheManager(cache_directory.expanduser().resolve())
+        if cache_directory
+        else CacheManager.default()
+    )
+    service = ProjectService(repository, cache=cache)
+    projects = sorted(repository.list(), key=lambda candidate: candidate.title.lower())
+    if project:
+        chosen = []
+        for wanted in project:
+            matches = [
+                candidate
+                for candidate in projects
+                if candidate.id == wanted or wanted.lower() in candidate.title.lower()
+            ]
+            if not matches:
+                raise typer.BadParameter(f"No project matches {wanted!r}.")
+            if len(matches) > 1:
+                titles = ", ".join(candidate.title for candidate in matches)
+                raise typer.BadParameter(f"{wanted!r} matches several projects: {titles}.")
+            chosen.extend(matches)
+        projects = list({candidate.id: candidate for candidate in chosen}.values())
+
+    failures = 0
+    for current in projects:
+        typer.echo(f"{current.title} (melody: {current.reference_voice} voice)")
+        build_reference_pitch(current, service.reference_audio, cache, current.transpose_semitones)
+        typer.echo("  reference pitch: ready")
+        for take in current.takes:
+            try:
+                _, analyzed, _ = service.analyze_take(current.id, take.id)
+            except Exception as error:  # report it and carry on with the next take
+                failures += 1
+                typer.echo(f"  {take.name}: FAILED ({error})")
+                continue
+            summary = analyzed.analysis_summary or {}
+            typer.echo(
+                f"  {take.name}: offset {summary.get('global_bias_cents', 0.0):+.0f} c, "
+                f"error {summary.get('relative_mean_absolute_error_cents', 0.0):.0f} c "
+                f"over {summary.get('matched_seconds', 0.0):.0f} s"
+            )
+    if failures:
+        raise typer.Exit(code=1)
+
+
 @app.command("setup-models")
 def setup_models() -> None:
     """Download and cache the separation, pitch and lyric-alignment models."""
