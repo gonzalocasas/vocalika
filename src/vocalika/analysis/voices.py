@@ -153,10 +153,13 @@ def separate_two_voices(
         & (interval >= 100.0)
         & (np.abs(interval - 1200.0) >= 100.0)
     )
-    gap = harmonic_level_db(audio, first, sample_rate, hop_length) - harmonic_level_db(
+    # Levels are -inf where a voice is absent, so the gap is only taken where
+    # both are present; elsewhere it would be -inf - -inf.
+    first_level = harmonic_level_db(audio, first, sample_rate, hop_length)
+    second_level = harmonic_level_db(
         audio, np.where(distinct, second, 0.0), sample_rate, hop_length
     )
-    distinct &= gap <= maximum_level_gap_db
+    distinct[distinct] = first_level[distinct] - second_level[distinct] <= maximum_level_gap_db
     distinct = _drop_short_runs(distinct, max(1, round(minimum_seconds * sample_rate / hop_length)))
 
     second_is_upper = distinct & (second > first)
