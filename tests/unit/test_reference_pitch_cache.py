@@ -8,7 +8,6 @@ import pytest
 import soundfile as sf
 
 from vocalika import __version__
-from vocalika.analysis.pitch import PyinPitchExtractor
 from vocalika.analysis.pitch_cache import extract_clean_pitch
 from vocalika.api.reference_pitch import build_reference_pitch
 from vocalika.audio.preprocessing import normalize_for_analysis
@@ -76,14 +75,7 @@ def test_the_contour_endpoint_caches_what_the_pipeline_would_read(tmp_path: Path
         audio_path=normalized.path,
         content_hash=asset.content_hash,
         cache=cache,
-        extractor=PyinPitchExtractor(
-            hop_length=config.pitch_hop_length,
-            frame_length=config.pitch_frame_length,
-            fmin_midi=config.pitch_min_midi,
-            fmax_midi=config.pitch_max_midi,
-            concert_pitch_hz=config.concert_pitch_hz,
-            harmonic_margin=config.pitch_harmonic_margin,
-        ),
+        extractor=config.reference_extractor(),
         cleaning_parameters=config.cleaning_parameters(),
         pipeline_version=__version__,
     )
@@ -92,7 +84,7 @@ def test_the_contour_endpoint_caches_what_the_pipeline_would_read(tmp_path: Path
     assert cached.track.sample_rate == config.analysis_sample_rate, (
         f"cached track is at {cached.track.sample_rate} Hz, not the analysis rate"
     )
-    expected_frames = math.ceil(3.0 * config.analysis_sample_rate / config.pitch_hop_length)
+    expected_frames = math.ceil(3.0 * config.analysis_sample_rate / 160)
     assert cached.track.times.size == pytest.approx(expected_frames, abs=4), (
         f"{cached.track.times.size} frames is not a 16 kHz track of this audio"
     )
@@ -107,6 +99,28 @@ def test_the_contour_endpoint_reports_the_analysis_rate_timeline(tmp_path: Path)
 
     assert payload["times"][-1] == pytest.approx(3.0, abs=0.1)
     step = payload["times"][1] - payload["times"][0]
-    assert step == pytest.approx(256 / 16_000, abs=1e-6), (
+    assert step == pytest.approx(160 / 16_000, abs=1e-6), (
         "frame spacing must follow the analysis rate"
     )
+
+
+def test_a_transposed_contour_is_the_original_shifted_exactly(tmp_path: Path) -> None:
+    """Transposition shifts the measured contour; it does not re-measure it.
+
+    Re-extracting pitch from time-stretched audio smears note transitions --
+    on a real duet it moved 8-11% of frames by more than 100 cents.
+    """
+    source = _reference_wav(tmp_path / "vocals.wav")
+    project, repository = _project(tmp_path, source)
+    cache = CacheManager(tmp_path / "cache")
+    service = ReferenceAudioService(repository)
+
+    original = build_reference_pitch(project, service, cache, 0)
+    raised = build_reference_pitch(project, service, cache, 3)
+
+    assert raised["times"] == original["times"]
+    for before, after in zip(original["midi"], raised["midi"], strict=True):
+        if before is None:
+            assert after is None
+        else:
+            assert after == pytest.approx(before + 3.0, abs=1e-3)

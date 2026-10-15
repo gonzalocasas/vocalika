@@ -8,7 +8,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 from vocalika.analysis.cleaning import clean_pitch_track
-from vocalika.analysis.pitch import PyinPitchExtractor
 from vocalika.config import AnalysisConfig
 from vocalika.practice.notes import note_name
 
@@ -33,23 +32,12 @@ class HeldNoteScore:
     verdict: str
 
 
-def _config_extractor(config: AnalysisConfig) -> PyinPitchExtractor:
-    return PyinPitchExtractor(
-        hop_length=config.pitch_hop_length,
-        frame_length=config.pitch_frame_length,
-        fmin_midi=config.pitch_min_midi,
-        fmax_midi=config.pitch_max_midi,
-        concert_pitch_hz=config.concert_pitch_hz,
-        harmonic_margin=config.pitch_harmonic_margin,
-    )
-
-
 #: Mean deviation from the singer's own centre, above which a note counts as
-#: unsteady rather than merely vibrato-ed. Calibrated against pyin's actual
-#: output: a healthy +-40 cent vibrato measures about 12 here and +-60 about
-#: 18, while a full semitone of wobble measures about 31. Frame-based tracking
-#: smooths the modulation, so this number is well below the true excursion.
-STEADINESS_LIMIT_CENTS = 30.0
+#: unsteady rather than vibrato-ed. RMVPE follows vibrato almost exactly, so a
+#: regular +-A cent vibrato measures its true mean deviation, 2A/pi: +-80
+#: cents (the wide end of healthy classical vibrato) measures about 51, while
+#: a full semitone either way -- a wobble -- measures 64 and up.
+STEADINESS_LIMIT_CENTS = 60.0
 
 
 def verdict_for(centre_cents: float | None, steadiness: float | None) -> str:
@@ -90,7 +78,7 @@ def score_held_note(
     """
     config = config or AnalysisConfig()
     track = clean_pitch_track(
-        _config_extractor(config).extract(audio_path), **config.cleaning_parameters()
+        config.pitch_extractor().extract(audio_path), **config.cleaning_parameters()
     )
 
     midi = np.asarray(track.midi, dtype=np.float64)
@@ -157,7 +145,7 @@ def score_interval(
     """
     config = config or AnalysisConfig()
     track = clean_pitch_track(
-        _config_extractor(config).extract(audio_path), **config.cleaning_parameters()
+        config.pitch_extractor().extract(audio_path), **config.cleaning_parameters()
     )
     midi = np.asarray(track.midi, dtype=np.float64)
     voiced_index = np.flatnonzero(np.isfinite(midi))

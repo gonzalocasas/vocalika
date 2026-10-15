@@ -27,7 +27,9 @@ both stems for everything that follows.
 **01 · Reference** — Listen to the isolated vocal, the instrumental, or a
 monitor mix with the voice turned as low as you like. Trim to the section you
 are working on, and transpose the song into your key; Vocalika shows the range
-it will ask of you before you sing a note. Lyrics are looked up for you and
+it will ask of you before you sing a note. Where two singers
+harmonise, choose which line is the melody: the louder, the upper or the
+lower. Lyrics are looked up for you and
 timed word by word to the original vocal: the sung line lights up as the song
 plays, and any line or word plays the song from right there.
 
@@ -82,9 +84,15 @@ There is no authentication, so keep it off the public internet.
 **Separation.** [Demucs](https://github.com/facebookresearch/demucs)
 (`htdemucs`) splits the reference into vocal and instrumental stems.
 
-**Pitch.** pYIN, run on a harmonic-only version of each vocal, tracks pitch
-continuously and reports how confident it is in every frame. Only frames where
-both voices are confidently singing are compared.
+**Pitch.** [RMVPE](https://arxiv.org/abs/2306.15412), a neural network built
+to hear the voice inside a mix, tracks pitch every 10 ms and reports how sure
+it is of every frame. On forty solo recordings it lands within 50 cents of
+hand-made annotations 98% of the time, with a median error of 3 cents. Where
+two people sing at once, Vocalika lifts out the second voice too and follows
+the louder one — or the upper or lower line, if you choose. Frames far quieter
+than the singing are ignored, so a piano left behind by separation is never
+mistaken for the voice. Only frames where both voices are confidently singing
+are compared.
 
 **Alignment.** Before comparing pitch, Vocalika finds where your take sits in
 the song — by direct correlation, by matching the shape of the words, and by

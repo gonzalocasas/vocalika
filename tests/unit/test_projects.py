@@ -264,3 +264,66 @@ async def test_a_blank_rename_keeps_the_existing_name(tmp_path: Path) -> None:
         )
         assert untouched.json()["project"]["title"] == "Keeps its name"
         assert untouched.json()["project"]["transpose_semitones"] == 2
+
+
+@pytest.mark.anyio
+async def test_the_melody_voice_is_a_project_setting(tmp_path: Path) -> None:
+    """Louder by default; upper or lower on request; nothing else accepted."""
+    reference_bytes = _wav_bytes(tmp_path / "reference.wav")
+    projects = tmp_path / "projects"
+    app = create_app(None, projects_directory=projects, library_directory=tmp_path / "analyses")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        created = await client.post(
+            "/api/projects",
+            data={"title": "Duet", "reference_is_vocal": "true"},
+            files={"reference_file": ("reference.wav", reference_bytes, "audio/wav")},
+        )
+        project = created.json()["project"]
+        assert project["reference_voice"] == "louder"
+
+        chosen = await client.patch(
+            f"/api/projects/{project['id']}", json={"reference_voice": "lower"}
+        )
+        assert chosen.json()["project"]["reference_voice"] == "lower"
+
+        invalid = await client.patch(
+            f"/api/projects/{project['id']}", json={"reference_voice": "alto"}
+        )
+        assert invalid.status_code == 422
+
+        # Other settings leave the choice alone.
+        transposed = await client.patch(
+            f"/api/projects/{project['id']}", json={"transpose_semitones": 1}
+        )
+        assert transposed.json()["project"]["reference_voice"] == "lower"
+
+    reloaded = create_app(
+        None, projects_directory=projects, library_directory=tmp_path / "analyses"
+    )
+    async with AsyncClient(transport=ASGITransport(app=reloaded), base_url="http://test") as client:
+        listed = await client.get("/api/projects")
+        assert listed.json()["projects"][0]["reference_voice"] == "lower"
+
+
+def test_projects_saved_before_the_voice_choice_still_load(tmp_path: Path) -> None:
+    payload = {
+        "id": "p1",
+        "title": "Old",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "reference": {
+            "title": "Old",
+            "source_type": "local",
+            "source_url": None,
+            "original_path": "/x.wav",
+            "vocal_path": "/x.wav",
+            "instrumental_path": None,
+            "duration_seconds": 1.0,
+            "sample_rate": 16000,
+            "separation_model": None,
+            "separation_cached": False,
+        },
+        "takes": [],
+    }
+    assert Project.from_dict(payload).reference_voice == "louder"

@@ -1227,6 +1227,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "scipy" },
     { name = "soundfile" },
+    { name = "torch" },
     { name = "typer" },
     { name = "uvicorn" },
 ]
@@ -1241,7 +1242,6 @@ dev = [
 ]
 real-input = [
     { name = "demucs" },
-    { name = "numpy" },
     { name = "torchaudio" },
     { name = "yt-dlp" },
 ]
@@ -1253,8 +1253,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28,<1" },
     { name = "librosa", specifier = ">=0.11,<1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.17,<2" },
-    { name = "numpy", specifier = ">=1.26,<3" },
-    { name = "numpy", marker = "extra == 'real-input'", specifier = ">=1.26,<2" },
+    { name = "numpy", specifier = ">=1.26,<2" },
     { name = "platformdirs", specifier = ">=4.4,<5" },
     { name = "plotly", specifier = ">=6.0,<7" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4,<9" },
@@ -1263,6 +1262,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12,<1" },
     { name = "scipy", specifier = ">=1.15,<2" },
     { name = "soundfile", specifier = ">=0.13,<1" },
+    { name = "torch", specifier = "==2.2.2" },
     { name = "torchaudio", marker = "extra == 'real-input'", specifier = "==2.2.2" },
     { name = "typer", specifier = ">=0.16,<1" },
     { name = "uvicorn", specifier = ">=0.35,<1" },

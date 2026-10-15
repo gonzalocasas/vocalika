@@ -55,7 +55,7 @@ function requestDelete(take: Take): void {
           <div class="take-copy">
             <span class="mono-muted">{{ String(project.takes.length - index).padStart(2, "0") }} · {{ takeDate(take.created_at) }}</span>
             <strong>{{ take.name }}</strong>
-            <small><b>{{ take.status.toUpperCase() }}</b> · {{ take.isolate_performance ? "vocal isolation" : "direct vocal" }} · {{ (take.reference_transpose_semitones ?? 0) >= 0 ? "+" : "" }}{{ take.reference_transpose_semitones ?? 0 }} semi</small>
+            <small><b>{{ take.status.toUpperCase() }}</b> · {{ take.isolate_performance ? "vocal isolation" : "direct vocal" }} · {{ (take.reference_transpose_semitones ?? 0) >= 0 ? "+" : "" }}{{ take.reference_transpose_semitones ?? 0 }} semi<template v-if="take.status === 'analyzed'"> · {{ take.reference_voice ?? "louder" }} voice</template></small>
           </div>
           <TakeWaveform :project-id="project.id" :take-id="take.id" :active="selectedTakeId === take.id" />
           <div class="take-mae"><span>MAE</span><strong>{{ take.analysis_summary ? `${take.analysis_summary.mean_absolute_error_cents.toFixed(0)}¢` : "—" }}</strong></div>

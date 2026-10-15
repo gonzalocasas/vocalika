@@ -58,11 +58,15 @@ def _sample_track(
     return SampledTrack(times=times, midi=midi, confidence=confidence, voiced=voiced)
 
 
-def _features(track: SampledTrack) -> FloatArray:
+def _features(track: SampledTrack, frames_per_second: float) -> FloatArray:
     voiced_pitch = track.midi[track.voiced]
     center = float(np.median(voiced_pitch)) if voiced_pitch.size else float(np.median(track.midi))
     relative_pitch = np.clip(track.midi - center, -24.0, 24.0)
-    derivative = np.gradient(relative_pitch)
+    # Semitones per 100 ms, whatever the frame rate: per frame, the movement
+    # cue would shrink as frames got shorter and lose its weight against
+    # static pitch. (Scaled by the rate rather than divided by the time step,
+    # so 10 fps stays bit-identical to the per-frame form it replaced.)
+    derivative = np.gradient(relative_pitch) * (frames_per_second / 10.0)
     confidence_weight = np.clip(track.confidence, 0.0, 1.0) * track.voiced
     # Melodic movement is transposition-invariant and is the strongest cue for
     # pairing corresponding notes. Static pitch position remains a weaker cue
@@ -86,6 +90,7 @@ def align_pitch_tracks(
     global_offset_seconds: float | None = None,
     temporal_consistency_weight: float = 0.1,
     allow_subsequence: bool = False,
+    step_penalty: float = 0.0,
 ) -> AlignmentResult:
     reference_start = max(0.0, -(global_offset_seconds or 0.0))
     performance_start = max(0.0, global_offset_seconds or 0.0)
@@ -99,8 +104,8 @@ def align_pitch_tracks(
         frames_per_second,
         start_time=performance_start,
     )
-    reference_features = _features(sampled_reference)
-    performance_features = _features(sampled_performance)
+    reference_features = _features(sampled_reference, frames_per_second)
+    performance_features = _features(sampled_performance, frames_per_second)
     shared_duration = min(
         float(sampled_reference.times[-1] - sampled_reference.times[0]),
         float(sampled_performance.times[-1] - sampled_performance.times[0]),
@@ -135,11 +140,16 @@ def align_pitch_tracks(
         reference_features.shape[1], performance_features.shape[1]
     )
     use_subsequence = allow_subsequence and length_ratio >= 1.5
+    # A cost on every step that is not diagonal: real tempo differences still
+    # pay for themselves, but the path no longer wiggles within a note to
+    # chase vibrato into whichever frames happen to match best.
+    weights_add = np.array([0.0, step_penalty, step_penalty])
     if not use_subsequence:
         _, raw_path = librosa.sequence.dtw(
             X=reference_features,
             Y=performance_features,
             metric="euclidean",
+            weights_add=weights_add,
             global_constraints=True,
             band_rad=band_radius,
             backtrack=True,
@@ -150,6 +160,7 @@ def align_pitch_tracks(
             X=reference_features,
             Y=performance_features,
             metric="euclidean",
+            weights_add=weights_add,
             subseq=True,
             backtrack=True,
         )
@@ -159,6 +170,7 @@ def align_pitch_tracks(
             X=performance_features,
             Y=reference_features,
             metric="euclidean",
+            weights_add=weights_add,
             subseq=True,
             backtrack=True,
         )

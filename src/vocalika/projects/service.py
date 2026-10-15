@@ -11,9 +11,10 @@ from uuid import uuid4
 from vocalika.audio.separation import DemucsVocalSeparator
 from vocalika.audio.sources import LocalAudioSource, YouTubeAudioSource, is_youtube_url
 from vocalika.cache.manager import CacheManager
+from vocalika.config import AnalysisConfig
 from vocalika.models.artifact import load_artifact
 from vocalika.pipeline import run_analysis
-from vocalika.projects.models import Project, ProjectReference, Take
+from vocalika.projects.models import Project, ProjectReference, ReferenceVoice, Take
 from vocalika.projects.reference_audio import ReferenceAudioService
 from vocalika.projects.repository import ProjectRepository
 
@@ -108,6 +109,7 @@ class ProjectService:
         transpose_semitones: int | None = None,
         lyrics: str | None = None,
         title: str | None = None,
+        reference_voice: ReferenceVoice | None = None,
     ) -> Project:
         def apply(project: Project) -> Project:
             start = project.trim_start_seconds if trim_start_seconds is None else trim_start_seconds
@@ -132,6 +134,9 @@ class ProjectService:
                 trim_end_seconds=end,
                 transpose_semitones=transpose,
                 lyrics=project.lyrics if lyrics is None else lyrics,
+                reference_voice=(
+                    project.reference_voice if reference_voice is None else reference_voice
+                ),
                 updated_at=_now(),
             )
 
@@ -184,7 +189,9 @@ class ProjectService:
             take = next(take for take in project.takes if take.id == take_id)
         except StopIteration as error:
             raise LookupError(f"Take not found: {take_id}") from error
-        analyzing = replace(take, status="analyzing", error=None)
+        analyzing = replace(
+            take, status="analyzing", error=None, reference_voice=project.reference_voice
+        )
         project = self._replace_take(project, analyzing)
         output = self.repository.project_directory(project_id) / "takes" / take_id / "analysis"
         try:
@@ -204,8 +211,11 @@ class ProjectService:
                 output,
                 reference_is_vocal=True,
                 reference_mix_path=reference_mix,
+                reference_pitch_path=Path(project.reference.vocal_path),
+                reference_pitch_semitones=take.reference_transpose_semitones,
                 isolate_performance=take.isolate_performance,
                 cache_directory=self.cache.root,
+                config=AnalysisConfig(reference_voice=project.reference_voice),
             )
             artifact = load_artifact(result_path)
         except Exception as error:

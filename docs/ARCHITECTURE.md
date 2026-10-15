@@ -58,9 +58,11 @@ Everything else depends on this.
 
 ## Pitch extraction
 
-Initial candidate:
-
-- `torchcrepe`
+RMVPE (`analysis/rmvpe.py`), chosen on the benchmark in `bench/pitch/` over
+pyin (which it replaced), FCPE, torchcrepe and basic-pitch. Where two voices
+sing at once, the second is recovered by harmonic cancellation and the melody
+chosen per project (`analysis/voices.py`). A transposed reference is measured
+untransposed and shifted exactly.
 
 Alternative implementations should remain possible.
 

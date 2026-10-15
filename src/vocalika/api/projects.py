@@ -22,7 +22,7 @@ from vocalika.projects.export import (
     PerformanceChannel,
     ProjectExportService,
 )
-from vocalika.projects.models import Project, Take
+from vocalika.projects.models import Project, ReferenceVoice, Take
 from vocalika.projects.reference_audio import ReferenceAudioService
 from vocalika.projects.repository import ProjectNotFoundError
 from vocalika.projects.service import ProjectService
@@ -34,6 +34,7 @@ class ProjectSettingsUpdate(BaseModel):
     trim_end_seconds: float | None = None
     transpose_semitones: int | None = None
     lyrics: str | None = None
+    reference_voice: ReferenceVoice | None = None
 
 
 class ExportRequest(BaseModel):

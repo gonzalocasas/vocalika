@@ -13,12 +13,15 @@ authors = [{ name = "Gonzalo Casas" }]
 dependencies = [
   "fastapi>=0.116,<1",
   "librosa>=0.11,<1",
-  "numpy>=1.26,<3",
+  # torch 2.2 is built against numpy 1.
+  "numpy>=1.26,<2",
   "platformdirs>=4.4,<5",
   "plotly>=6.0,<7",
   "python-multipart>=0.0.20,<1",
   "scipy>=1.15,<2",
   "soundfile>=0.13,<1",
+  # RMVPE, the pitch tracker. Pinned with torchaudio below (real-input).
+  "torch==2.2.2",
   "typer>=0.16,<1",
   "uvicorn>=0.35,<1",
 ]
@@ -33,7 +36,6 @@ dev = [
 ]
 real-input = [
   "demucs>=4.0.1,<5",
-  "numpy>=1.26,<2",
   # The MMS forced aligner that times lyrics. torchaudio is built against one
   # exact torch release, so this moves in lockstep with the torch in uv.lock;
   # releases from 2.9 on also drop forced_align.

@@ -77,6 +77,8 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .graphite-segmented { padding:3px; border:1px solid #33383a; border-radius:10px; background:#1b1e20; }
 .graphite-segmented button { border:0; border-radius:8px; padding:8px 13px; background:transparent; color:#93908a; font:500 10px "IBM Plex Mono",monospace; letter-spacing:.08em; }
 .graphite-segmented button.active { background:var(--cream); color:var(--surface); }
+.voice-choice { width:100%; margin:4px 0 10px; }
+.voice-choice button { flex:1; }
 .drop-target { position:relative; display:grid; gap:5px; border:1px dashed #3a4042; border-radius:11px; padding:17px; background:var(--surface-raised); }
 .drop-target span { overflow:hidden; text-overflow:ellipsis; font:500 11px "IBM Plex Mono",monospace; letter-spacing:.1em; white-space:nowrap; }
 .drop-target small { color:#7c817f; font:400 9px "IBM Plex Mono",monospace; letter-spacing:.08em; }

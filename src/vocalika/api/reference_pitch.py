@@ -7,7 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from vocalika import __version__
-from vocalika.analysis.pitch import PyinPitchExtractor
+from vocalika.analysis.pitch import transpose_track
 from vocalika.analysis.pitch_cache import extract_clean_pitch
 from vocalika.audio.preprocessing import normalize_for_analysis
 from vocalika.audio.sources import LocalAudioSource
@@ -29,7 +29,7 @@ def build_reference_pitch(
 
     The recording screen needs this before any take exists, so it cannot be
     read out of an analysis artifact. It goes through the same cached
-    extractor the pipeline uses, so the first call pays for pyin and every
+    extractor the pipeline uses, so the first call pays for extraction and every
     later one -- including the pipeline's own, when a take is finally
     analysed -- is a cache read.
 
@@ -44,27 +44,20 @@ def build_reference_pitch(
     Unvoiced frames are returned as null rather than dropped, so the client
     breaks the line at a rest instead of interpolating across it.
     """
-    config = config or AnalysisConfig()
-    vocal_path = Path(reference_audio.resolve(project, "vocal", transpose_semitones))
+    config = config or AnalysisConfig(reference_voice=project.reference_voice)
+    # Measured on the untransposed vocal and shifted exactly: see transpose_track.
+    vocal_path = Path(reference_audio.resolve(project, "vocal", 0))
     asset = LocalAudioSource(vocal_path).acquire()
     normalized = normalize_for_analysis(asset, cache, config.analysis_sample_rate)
-    extractor = PyinPitchExtractor(
-        hop_length=config.pitch_hop_length,
-        frame_length=config.pitch_frame_length,
-        fmin_midi=config.pitch_min_midi,
-        fmax_midi=config.pitch_max_midi,
-        concert_pitch_hz=config.concert_pitch_hz,
-        harmonic_margin=config.pitch_harmonic_margin,
-    )
     cached = extract_clean_pitch(
         audio_path=normalized.path,
         content_hash=asset.content_hash,
         cache=cache,
-        extractor=extractor,
+        extractor=config.reference_extractor(),
         cleaning_parameters=config.cleaning_parameters(),
         pipeline_version=__version__,
     )
-    track = cached.track
+    track = transpose_track(cached.track, transpose_semitones)
     midi = np.asarray(track.midi, dtype=np.float64)
     return {
         "times": [round(float(value), 4) for value in track.times],
@@ -86,7 +79,7 @@ def vocal_range(midi: NDArray[np.float64]) -> dict[str, Any] | None:
     """The reference vocal's working range, for judging whether it is singable.
 
     Reported as the 5th to 95th percentile rather than the outright extremes.
-    pyin drops or doubles an octave on a small number of frames, and a single
+    a tracker can drop or double an octave on a small number of frames, and a single
     such frame would otherwise widen the range by an octave and misrepresent
     what the song actually asks for.
     """

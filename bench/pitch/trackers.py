@@ -40,25 +40,28 @@ def _clip_range(f0: np.ndarray) -> np.ndarray:
 
 
 def pyin_vocalika(audio: np.ndarray) -> Estimate:
-    """Vocalika's production path today: pyin with HPSS, then clean_pitch_track."""
+    """Vocalika's production path before RMVPE: pyin with HPSS, then cleaning.
+
+    That extractor has been removed from Vocalika; its estimates live on in
+    the benchmark cache (tests/external-data/pitch-bench-cache), which is
+    where this tracker's results now come from.
+    """
+    raise RuntimeError("pyin is no longer in Vocalika; only cached estimates are available")
+
+
+def vocalika(audio: np.ndarray) -> Estimate:
+    """Vocalika's production path: RMVPE reference extractor, then cleaning."""
     from vocalika.analysis.cleaning import clean_pitch_track
-    from vocalika.analysis.pitch import PyinPitchExtractor
     from vocalika.config import AnalysisConfig
 
     config = AnalysisConfig()
-    extractor = PyinPitchExtractor(
-        hop_length=config.pitch_hop_length,
-        frame_length=config.pitch_frame_length,
-        fmin_midi=config.pitch_min_midi,
-        fmax_midi=config.pitch_max_midi,
-        concert_pitch_hz=config.concert_pitch_hz,
-        harmonic_margin=config.pitch_harmonic_margin,
-    )
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "audio.wav"
         sf.write(path, audio, SAMPLE_RATE)
-        track = clean_pitch_track(extractor.extract(path), **config.cleaning_parameters())
-    f0 = 440.0 * 2.0 ** ((track.midi - 69.0) / 12.0)
+        track = clean_pitch_track(
+            config.reference_extractor().extract(path), **config.cleaning_parameters()
+        )
+    f0 = config.concert_pitch_hz * 2.0 ** ((track.midi - 69.0) / 12.0)
     return Estimate(track.times, _clip_range(f0), track.confidence)
 
 
@@ -155,6 +158,7 @@ def basic_pitch(audio: np.ndarray, threshold: float = 0.3) -> Estimate:
 
 
 TRACKERS = {
+    "vocalika": vocalika,
     "pyin (vocalika)": pyin_vocalika,
     "rmvpe": rmvpe,
     "crepe-full": crepe,

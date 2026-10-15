@@ -260,7 +260,7 @@ onMounted(() => {
   document.body.classList.add("modal-open")
   scrollFrame = window.requestAnimationFrame(scrollLoop)
 })
-watch(() => [props.project.id, props.project.transpose_semitones], loadContour)
+watch(() => [props.project.id, props.project.transpose_semitones, props.project.reference_voice], loadContour)
 onBeforeUnmount(() => {
   stopMonitor()
   livePitch.stop()

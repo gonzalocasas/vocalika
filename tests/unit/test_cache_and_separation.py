@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import soundfile as sf
 
-from vocalika.analysis.pitch import PyinPitchExtractor
+from vocalika.analysis.pitch import RmvpePitchExtractor
 from vocalika.analysis.pitch_cache import extract_clean_pitch
 from vocalika.audio.preprocessing import normalize_for_analysis
 from vocalika.audio.separation import DemucsVocalSeparator
@@ -75,7 +75,7 @@ def test_clean_pitch_is_cached_by_content_and_parameters(tmp_path: Path) -> None
     write_wav(source, sample_rate=16_000)
     asset = LocalAudioSource(source).acquire()
     cache = CacheManager(tmp_path / "cache")
-    extractor = PyinPitchExtractor()
+    extractor = RmvpePitchExtractor()
     parameters = {
         "confidence_threshold": 0.55,
         "octave_window": 9,
@@ -98,16 +98,16 @@ def test_clean_pitch_is_cached_by_content_and_parameters(tmp_path: Path) -> None
         cleaning_parameters=parameters,
         pipeline_version="test",
     )
-    without_harmonic_preprocessing = extract_clean_pitch(
+    following_the_louder_voice = extract_clean_pitch(
         audio_path=source,
         content_hash=asset.content_hash,
         cache=cache,
-        extractor=PyinPitchExtractor(harmonic_margin=0.0),
+        extractor=RmvpePitchExtractor(voice="louder"),
         cleaning_parameters=parameters,
         pipeline_version="test",
     )
 
     assert not first.cache_hit
     assert second.cache_hit
-    assert not without_harmonic_preprocessing.cache_hit
+    assert not following_the_louder_voice.cache_hit
     np.testing.assert_array_equal(first.track.midi, second.track.midi)

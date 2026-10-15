@@ -21,7 +21,7 @@ from vocalika.analysis.offset import (
     refine_global_offset,
     select_global_offset,
 )
-from vocalika.analysis.pitch import PitchTrack, PyinPitchExtractor
+from vocalika.analysis.pitch import PitchTrack, transpose_track
 from vocalika.analysis.pitch_cache import extract_clean_pitch
 from vocalika.analysis.stable_notes import analyze_stable_pitch_centers
 from vocalika.audio.preprocessing import normalize_for_analysis
@@ -105,6 +105,8 @@ def run_analysis(
     *,
     reference_is_vocal: bool = False,
     reference_mix_path: Path | None = None,
+    reference_pitch_path: Path | None = None,
+    reference_pitch_semitones: int = 0,
     isolate_performance: bool = False,
     config: AnalysisConfig | None = None,
     cache_directory: Path | None = None,
@@ -174,21 +176,26 @@ def run_analysis(
         refresh=refresh_cache,
     )
 
-    extractor = PyinPitchExtractor(
-        hop_length=config.pitch_hop_length,
-        frame_length=config.pitch_frame_length,
-        fmin_midi=config.pitch_min_midi,
-        fmax_midi=config.pitch_max_midi,
-        concert_pitch_hz=config.concert_pitch_hz,
-        harmonic_margin=config.pitch_harmonic_margin,
-    )
     cleaning_parameters = config.cleaning_parameters()
     progress("Extracting reference pitch")
+    # A transposed reference is measured on its untransposed vocal and then
+    # shifted exactly; see transpose_track.
+    pitch_reference_asset = analysis_reference_asset
+    normalized_pitch_reference = normalized_reference
+    if reference_pitch_path is not None:
+        pitch_reference_asset = LocalAudioSource(reference_pitch_path).acquire()
+        normalized_pitch_reference = normalize_for_analysis(
+            pitch_reference_asset,
+            cache,
+            config.analysis_sample_rate,
+            refresh=refresh_cache,
+        )
     cached_reference_pitch = extract_clean_pitch(
-        audio_path=normalized_reference.path,
-        content_hash=analysis_reference_asset.content_hash,
+        audio_path=normalized_pitch_reference.path,
+        content_hash=pitch_reference_asset.content_hash,
         cache=cache,
-        extractor=extractor,
+        # The reference may carry harmony; a take is one singer.
+        extractor=config.reference_extractor(),
         cleaning_parameters=cleaning_parameters,
         pipeline_version=__version__,
         refresh=refresh_cache,
@@ -198,12 +205,12 @@ def run_analysis(
         audio_path=normalized_performance.path,
         content_hash=analysis_performance_asset.content_hash,
         cache=cache,
-        extractor=extractor,
+        extractor=config.pitch_extractor(),
         cleaning_parameters=cleaning_parameters,
         pipeline_version=__version__,
         refresh=refresh_cache,
     )
-    reference_pitch = cached_reference_pitch.track
+    reference_pitch = transpose_track(cached_reference_pitch.track, reference_pitch_semitones)
     performance_pitch = cached_performance_pitch.track
 
     progress("Estimating global time offset")
@@ -261,6 +268,7 @@ def run_analysis(
         band_radius=config.alignment_band_radius,
         global_offset_seconds=applied_offset_seconds,
         temporal_consistency_weight=config.alignment_temporal_consistency_weight,
+        step_penalty=config.alignment_step_penalty,
         allow_subsequence=(
             offset_estimate is not None
             and offset_estimate.confidence >= config.alignment_offset_minimum_confidence
@@ -371,12 +379,17 @@ def run_analysis(
         },
         "pitch": {
             "extractor": reference_pitch.extractor,
+            "performance_extractor": performance_pitch.extractor,
             "sample_rate": reference_pitch.sample_rate,
             "hop_length": reference_pitch.hop_length,
-            "fmin_midi": extractor.fmin_midi,
-            "fmax_midi": extractor.fmax_midi,
-            "concert_pitch_hz": extractor.concert_pitch_hz,
-            "harmonic_margin": extractor.harmonic_margin,
+            "fmin_midi": config.pitch_min_midi,
+            "fmax_midi": config.pitch_max_midi,
+            "concert_pitch_hz": config.concert_pitch_hz,
+            "reference_voice": config.reference_voice,
+            "reference_pitch_source": (
+                pitch_reference_asset.to_dict() if reference_pitch_path is not None else None
+            ),
+            "reference_pitch_semitones": reference_pitch_semitones,
             "arrays": arrays_path.name,
             "reference_cache_hit": cached_reference_pitch.cache_hit,
             "performance_cache_hit": cached_performance_pitch.cache_hit,

@@ -82,6 +82,9 @@ export interface ProjectReference {
   separation_cached: boolean
 }
 
+/** Which voice is the melody where the reference has two singers at once. */
+export type ReferenceVoice = "louder" | "upper" | "lower"
+
 export interface Take {
   id: string
   name: string
@@ -93,6 +96,7 @@ export interface Take {
   analysis_summary: AnalysisSummary | null
   error: string | null
   reference_transpose_semitones?: number
+  reference_voice?: ReferenceVoice
 }
 
 export interface Project {
@@ -105,6 +109,7 @@ export interface Project {
   trim_start_seconds: number
   trim_end_seconds: number | null
   transpose_semitones: number
+  reference_voice: ReferenceVoice
   takes: Take[]
 }
 

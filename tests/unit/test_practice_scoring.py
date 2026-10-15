@@ -36,7 +36,7 @@ def tone(path: Path, segments: list[tuple[float, float | None]], vibrato_cents: 
         increment = 2 * np.pi * frequency / SAMPLE_RATE
         angles = phase + np.cumsum(increment)
         phase = float(angles[-1]) if count else phase
-        # A couple of harmonics so pyin sees a voice-like spectrum.
+        # A couple of harmonics, for a voice-like spectrum.
         wave = 0.5 * np.sin(angles) + 0.2 * np.sin(2 * angles) + 0.1 * np.sin(3 * angles)
         parts.append(wave.astype(np.float32))
     sf.write(path, np.concatenate(parts), SAMPLE_RATE)

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
+ReferenceVoice = Literal["louder", "upper", "lower"]
+
 
 @dataclass(frozen=True)
 class ProjectReference:
@@ -34,6 +36,8 @@ class Take:
     analysis_summary: dict[str, Any] | None = None
     error: str | None = None
     reference_transpose_semitones: int = 0
+    # The reference voice the take was last analysed against.
+    reference_voice: ReferenceVoice = "louder"
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> Take:
@@ -51,6 +55,8 @@ class Project:
     trim_start_seconds: float = 0.0
     trim_end_seconds: float | None = None
     transpose_semitones: int = 0
+    # Which voice is the melody where the reference has two singers.
+    reference_voice: ReferenceVoice = "louder"
     takes: tuple[Take, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, Any]:

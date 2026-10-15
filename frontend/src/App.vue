@@ -149,7 +149,7 @@ async function commitRename(): Promise<void> {
 }
 
 async function handleUpdate(
-  settings: Partial<Pick<Project, "title" | "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones" | "lyrics">>,
+  settings: Partial<Pick<Project, "title" | "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones" | "reference_voice" | "lyrics">>,
 ): Promise<void> {
   if (selectedProject.value) await updateProject(selectedProject.value.id, settings)
 }

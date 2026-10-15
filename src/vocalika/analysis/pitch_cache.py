@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 from vocalika.analysis.cleaning import clean_pitch_track
-from vocalika.analysis.pitch import PitchTrack, PyinPitchExtractor
+from vocalika.analysis.pitch import PitchTrack, RmvpePitchExtractor
 from vocalika.cache.manager import CacheManager
 
 
@@ -22,20 +22,14 @@ def extract_clean_pitch(
     audio_path: Path,
     content_hash: str,
     cache: CacheManager,
-    extractor: PyinPitchExtractor,
+    extractor: RmvpePitchExtractor,
     cleaning_parameters: dict[str, Any],
     pipeline_version: str,
     refresh: bool = False,
 ) -> CachedPitchTrack:
     parameters = {
         "pipeline_version": pipeline_version,
-        "extractor": "librosa.pyin",
-        "hop_length": extractor.hop_length,
-        "frame_length": extractor.frame_length,
-        "fmin_midi": extractor.fmin_midi,
-        "fmax_midi": extractor.fmax_midi,
-        "concert_pitch_hz": extractor.concert_pitch_hz,
-        "harmonic_margin": extractor.harmonic_margin,
+        **extractor.cache_parameters(),
         "cleaning": cleaning_parameters,
     }
     path = cache.pitch_path(content_hash, parameters)

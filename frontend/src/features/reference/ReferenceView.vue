@@ -8,11 +8,11 @@ import { jumpTime } from "./lyricsTiming"
 import TimedLyrics from "./TimedLyrics.vue"
 import { useLyricsTiming } from "./useLyricsTiming"
 import { seekTimeAt } from "./seek"
-import type { Project, WaveformEnvelope } from "../../shared/types"
+import type { Project, ReferenceVoice, WaveformEnvelope } from "../../shared/types"
 
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{
-  update: [settings: Partial<Pick<Project, "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones" | "lyrics">>]
+  update: [settings: Partial<Pick<Project, "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones" | "reference_voice" | "lyrics">>]
 }>()
 
 const stem = ref<"vocal" | "instrumental" | "mix">("vocal")
@@ -37,6 +37,7 @@ const contour = ref<ProgressContour | null>(null)
 const sungRange = computed(() => transposedRange(referenceRange.value, transpose.value))
 
 async function loadRange(): Promise<void> {
+  // The range and the pacing contour both follow the chosen melody voice.
   try {
     const payload = await apiJson<ProgressContour & { range: VocalRange | null }>(
       `/api/projects/${props.project.id}/reference/pitch`,
@@ -49,6 +50,17 @@ async function loadRange(): Promise<void> {
   }
 }
 void loadRange()
+watch(() => props.project.reference_voice, loadRange)
+
+const VOICES: { value: ReferenceVoice; label: string }[] = [
+  { value: "louder", label: "LOUDER" },
+  { value: "upper", label: "UPPER" },
+  { value: "lower", label: "LOWER" },
+]
+
+function chooseVoice(voice: ReferenceVoice): void {
+  if (voice !== props.project.reference_voice) emit("update", { reference_voice: voice })
+}
 
 const lyrics = ref(props.project.lyrics)
 const editingLyrics = ref(false)
@@ -486,6 +498,22 @@ onBeforeUnmount(stop)
           <small>{{ sungRange.semitones.toFixed(0) }} semitones · centred on {{ sungRange.median_note }}</small>
         </div>
         <p class="feature-note">Applied to preview and recording playback. New takes remember this key for analysis and export.</p>
+      </section>
+      <section class="feature-panel compact-panel">
+        <p class="mono-eyebrow accent-text">MELODY VOICE</p>
+        <div class="segmented graphite-segmented voice-choice">
+          <button
+            v-for="voice in VOICES"
+            :key="voice.value"
+            :class="{ active: project.reference_voice === voice.value }"
+            @click="chooseVoice(voice.value)"
+          >{{ voice.label }}</button>
+        </div>
+        <p class="feature-note">
+          Where two people sing at once, which voice is the melody you sing against.
+          The louder one is right for most songs; in a duet at equal level, choose the
+          upper or lower line. Takes are compared against the voice chosen when they are analysed.
+        </p>
       </section>
       <section class="feature-panel compact-panel status-card">
         <p class="mono-eyebrow accent-text">SEPARATION</p>

@@ -109,9 +109,13 @@ def test_vibrato_has_neutral_bias_but_nonzero_contour_error(
         "summary"
     ]
 
+    # Against a steady reference, a faithfully tracked +-30 cent vibrato is off
+    # by 2*30/pi = 19 cents on average, and within 25 cents for
+    # (2/pi)*asin(25/30) = 63% of the time. Alignment pulls both slightly
+    # toward the reference.
     assert summary["global_bias_cents"] == pytest.approx(0.0, abs=5.0)
-    assert 5.0 < summary["mean_absolute_error_cents"] < 20.0
-    assert summary["within_25_percent"] > 90.0
+    assert 10.0 < summary["mean_absolute_error_cents"] < 22.0
+    assert 55.0 < summary["within_25_percent"] < 85.0
 
 
 def test_one_wrong_note_is_localized_to_one_quarter_of_the_melody(

@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import os
 import tempfile
-from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,8 +12,10 @@ import pytest
 import soundfile as sf
 
 from vocalika.analysis.alignment import align_pitch_tracks
+from vocalika.analysis.cleaning import clean_pitch_track
 from vocalika.analysis.comparison import ComparisonResult, compare_alignment
-from vocalika.analysis.pitch import PitchTrack, PyinPitchExtractor
+from vocalika.analysis.pitch import PitchTrack
+from vocalika.config import AnalysisConfig
 
 DEFAULT_DATA_ROOT = Path(__file__).parents[1] / "external-data"
 DATA_ROOT = Path(os.environ.get("VOCALIKA_OPEN_DATA_DIR", DEFAULT_DATA_ROOT))
@@ -35,9 +36,10 @@ with VOCADITO_BASELINE_PATH.open(newline="", encoding="utf-8") as _source:
     VOCADITO_BASELINE = {int(row["track_id"]): row for row in csv.DictReader(_source)}
 
 # Tolerances applied to the recorded per-track baseline. They are wide enough to
-# absorb a faithful reimplementation of pyin -- which will not be bit-exact,
-# because a different FFT shifts results in the last decimal places -- while
-# still failing on a genuine accuracy regression.
+# absorb numerical drift across torch builds and CPUs -- RMVPE is not
+# bit-exact between them -- while still failing on a genuine accuracy
+# regression. Regenerate the baseline after an intended change with:
+#     uv run python tests/integration/test_open_datasets.py
 CENTS_TOLERANCE_FACTOR = 1.5
 CENTS_TOLERANCE_FLOOR = 3.0
 WITHIN_50_TOLERANCE = 0.08
@@ -47,11 +49,10 @@ FRAMES_TOLERANCE_FACTOR = 0.8
 # in the error tail, which the median cannot see.
 MEAN_CENTS_TOLERANCE_FACTOR = 1.4
 
-# pyin drops an octave on a handful of tracks. The error is confined to a small
-# fraction of frames -- median accuracy on these tracks stays in single-digit
-# cents -- but it inflates the mean badly, which is why per-track bars below key
-# off the median. Tracked explicitly so a fix or a regression is visible.
-VOCADITO_OCTAVE_ERROR_TRACKS = {17, 18, 29, 34}
+# Tracks on which the pitch track makes a few octave errors -- under 1% of
+# frames on each, against up to ~8% on the pyin it replaced. Kept as an
+# explicit set so a regression names the tracks it spreads to.
+VOCADITO_OCTAVE_ERROR_TRACKS = {5, 6, 33, 34, 40}
 
 
 @dataclass(frozen=True)
@@ -67,15 +68,23 @@ class VocaditoMeasurement:
 
 
 def _measure_vocadito_track(arguments: tuple[Path, int]) -> VocaditoMeasurement:
-    """Extract one track and score it against the published frame-level F0."""
+    """Score one track through the production path against the published F0.
+
+    The reference extractor and the cleaning are exactly what a song gets in
+    the app -- second-voice search included, which on a solo recording must
+    change nothing.
+    """
     root, track_id = arguments
+    config = AnalysisConfig()
     audio, sample_rate = librosa.load(
         root / "Audio" / f"vocadito_{track_id}.wav", sr=16_000, mono=True
     )
     with tempfile.TemporaryDirectory() as directory:
         resampled_path = Path(directory) / f"vocadito_{track_id}.wav"
         sf.write(resampled_path, audio, sample_rate)
-        estimate = PyinPitchExtractor().extract(resampled_path)
+        estimate = clean_pitch_track(
+            config.reference_extractor().extract(resampled_path), **config.cleaning_parameters()
+        )
 
     annotation = np.loadtxt(
         root / "Annotations" / "F0" / f"vocadito_{track_id}_f0.csv", delimiter=","
@@ -86,11 +95,10 @@ def _measure_vocadito_track(arguments: tuple[Path, int]) -> VocaditoMeasurement:
         annotation[right_indices, 0] - estimate.times
     )
     expected_frequency = annotation[right_indices - use_left, 1]
-    confident = estimate.voiced & (estimate.confidence >= 0.55)
-    valid = confident & np.isfinite(estimate.raw_frequency_hz) & (expected_frequency > 0.0)
-    cents_error = np.abs(
-        1200.0 * np.log2(estimate.raw_frequency_hz[valid] / expected_frequency[valid])
-    )
+    estimated_frequency = config.concert_pitch_hz * 2.0 ** ((estimate.midi - 69.0) / 12.0)
+    confident = np.isfinite(estimated_frequency)
+    valid = confident & (expected_frequency > 0.0)
+    cents_error = np.abs(1200.0 * np.log2(estimated_frequency[valid] / expected_frequency[valid]))
     annotated_voiced = expected_frequency > 0.0
     return VocaditoMeasurement(
         track_id=track_id,
@@ -109,19 +117,18 @@ def _measure_vocadito_track(arguments: tuple[Path, int]) -> VocaditoMeasurement:
 def vocadito_measurements() -> dict[int, VocaditoMeasurement]:
     """Score every vocadito track once and share the result across the module.
 
-    Extraction dominates the cost (roughly two minutes of pyin over the full
-    13.6 minutes of audio), so tracks are measured in parallel.
+    RMVPE runs the full 13.6 minutes of audio in well under a minute, so
+    tracks are measured in turn.
     """
     root = _dataset_root("vocadito")
-    track_ids = sorted(VOCADITO_BASELINE)
-    workers = min(8, os.cpu_count() or 1)
-    with ProcessPoolExecutor(max_workers=workers) as pool:
-        measurements = pool.map(_measure_vocadito_track, [(root, i) for i in track_ids])
-        return {measurement.track_id: measurement for measurement in measurements}
+    return {
+        track_id: _measure_vocadito_track((root, track_id))
+        for track_id in sorted(VOCADITO_BASELINE)
+    }
 
 
 @pytest.mark.parametrize("track_id", sorted(VOCADITO_BASELINE))
-def test_vocadito_pyin_matches_frame_level_f0(
+def test_vocadito_pitch_matches_frame_level_f0(
     track_id: int,
     vocadito_measurements: dict[int, VocaditoMeasurement],
 ) -> None:
@@ -153,26 +160,26 @@ def test_vocadito_accuracy_holds_across_the_whole_dataset(
     within_50 = np.array([m.within_50 for m in measurements])
     within_25 = np.array([m.within_25 for m in measurements])
 
-    # Bars sit roughly 20% off the recorded baseline: far outside the drift a
-    # faithful reimplementation would produce, well inside a real regression.
+    # Bars sit roughly 20-35% off the recorded baseline: far outside the drift
+    # numerical differences produce, well inside a real regression. For
+    # scale, pyin measured 9.8 / 16.0 / 0.937 / 0.839 / 0.810 on these.
     assert len(measurements) == 40
-    assert float(np.median(median_cents)) < 12.0
-    assert float(np.max(median_cents)) < 20.0
-    assert float(np.median(within_50)) > 0.91
-    assert float(np.min(within_50)) > 0.80
-    assert float(np.median(within_25)) > 0.78
+    assert float(np.median(median_cents)) < 4.0
+    assert float(np.max(median_cents)) < 8.0
+    assert float(np.median(within_50)) > 0.97
+    assert float(np.min(within_50)) > 0.92
+    assert float(np.median(within_25)) > 0.93
     # Every track must contribute enough confident frames to be meaningful.
-    assert min(m.frames for m in measurements) >= 250
+    assert min(m.frames for m in measurements) >= 400
 
 
 def test_vocadito_octave_errors_stay_confined_to_known_tracks(
     vocadito_measurements: dict[int, VocaditoMeasurement],
 ) -> None:
-    """Pin the octave-halving weakness so it cannot spread silently.
+    """Pin the residual octave errors so they cannot spread silently.
 
-    Track 34 is the worst case: pyin tracks a sub-harmonic for part of the
-    performance, which collapses its voicing recall and inflates its mean error
-    to roughly 87 cents even though its median stays near 8.
+    The worst track (33) errs on about 1% of frames. Under pyin, track 34
+    tracked a sub-harmonic for long enough to push its mean error to 87 cents.
     """
     affected = {
         track_id
@@ -183,7 +190,7 @@ def test_vocadito_octave_errors_stay_confined_to_known_tracks(
         f"octave errors appeared on new tracks: {sorted(affected - VOCADITO_OCTAVE_ERROR_TRACKS)}"
     )
     for track_id in affected:
-        assert vocadito_measurements[track_id].octave_errors < 0.10
+        assert vocadito_measurements[track_id].octave_errors < 0.02
     unaffected = [
         measurement
         for track_id, measurement in vocadito_measurements.items()
@@ -289,3 +296,30 @@ def test_mast_melodic_motion_regression_case_aligns_correctly() -> None:
 
     assert comparison.relative_mean_absolute_error_cents < 50.0
     assert comparison.relative_within_50_percent > 75.0
+
+
+def _write_vocadito_baseline() -> None:
+    """Re-measure every Vocadito track and overwrite the recorded baseline."""
+    root = DATA_ROOT / "vocadito"
+    with VOCADITO_BASELINE_PATH.open(newline="", encoding="utf-8") as source:
+        rows = list(csv.DictReader(source))
+    for row in rows:
+        measured = _measure_vocadito_track((root, int(row["track_id"])))
+        row.update(
+            frames=measured.frames,
+            median_cents=round(measured.median_cents, 2),
+            mean_cents=round(measured.mean_cents, 2),
+            within_50=round(measured.within_50, 4),
+            within_25=round(measured.within_25, 4),
+            octave_errors=round(measured.octave_errors, 4),
+            voicing_recall=round(measured.voicing_recall, 4),
+        )
+        print(row, flush=True)
+    with VOCADITO_BASELINE_PATH.open("w", newline="", encoding="utf-8") as target:
+        writer = csv.DictWriter(target, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    _write_vocadito_baseline()

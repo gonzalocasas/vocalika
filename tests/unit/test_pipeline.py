@@ -63,13 +63,12 @@ def test_opt_in_performance_isolation_uses_stem_and_preserves_mix(
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
 
     assert artifact["performance"]["source"]["path"] == str(performance_mix.resolve())
-    assert artifact["performance"]["analysis_source"]["path"] == str(
-        isolated_performance.resolve()
-    )
+    assert artifact["performance"]["analysis_source"]["path"] == str(isolated_performance.resolve())
     assert artifact["performance"]["original_mix"]["path"] == str(performance_mix.resolve())
     assert artifact["performance"]["isolation_applied"] is True
     assert artifact["performance"]["separation"]["model"] == "test-separator"
-    assert artifact["pitch"]["harmonic_margin"] == 1.0
+    assert artifact["pitch"]["extractor"] == "rmvpe+second-voice-louder"
+    assert artifact["pitch"]["performance_extractor"] == "rmvpe"
     frames = artifact["comparison"]["frames"]
     frame_count = len(frames["reference_time"])
     for key in (

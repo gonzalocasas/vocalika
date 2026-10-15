@@ -44,7 +44,7 @@ async function load(): Promise<void> {
   }
 }
 
-watch(() => [props.project.id, props.project.transpose_semitones], load, { immediate: true })
+watch(() => [props.project.id, props.project.transpose_semitones, props.project.reference_voice], load, { immediate: true })
 
 // The recorder finishes asynchronously; submit as soon as the file exists.
 watch(attempt.recorder.recordedFile, (file) => {

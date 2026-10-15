@@ -144,7 +144,7 @@ def serve(
 
 @app.command("setup-models")
 def setup_models() -> None:
-    """Download and cache the default source-separation model."""
+    """Download and cache the separation, pitch and lyric-alignment models."""
     try:
         from demucs.pretrained import get_model
     except ImportError as error:
@@ -159,6 +159,11 @@ def setup_models() -> None:
     typer.echo("Downloading the MMS lyric-alignment model if needed…")
     MMS_FA.get_model(with_star=True)
     typer.echo("Model ready: MMS forced aligner")
+    from vocalika.analysis.rmvpe import ensure_weights
+
+    typer.echo("Downloading the RMVPE pitch model if needed…")
+    ensure_weights()
+    typer.echo("Model ready: RMVPE")
 
 
 @app.command("cache-path")
