@@ -36,8 +36,9 @@ as multiples of real time: vocalika 26x (two RMVPE passes), rmvpe 56x, fcpe
 123x, basic-pitch 14x, pyin 9x, torchcrepe 0.7x.
 
 basic-pitch is a polyphonic note transcriber, read here as a melody tracker by
-taking its strongest contour bin. Most of its gap is voicing: it misses ~14%
-of sung frames, but 97% of the pitch it does report is within 50 cents, and it
+taking its strongest contour bin. Most of its gap is voicing: it misses 14% of
+sung frames solo and 18% separated from a band, but 96-97% of the sung frames
+it does report are within 50 cents, and it
 reports pitch where nobody sings far less often than any other tracker (6-9%
 of unvoiced frames on solo and separated audio, against 24-28% for vocalika).
 That makes it a candidate cross-check for voicing, not a replacement.
