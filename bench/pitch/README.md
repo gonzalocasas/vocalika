@@ -23,16 +23,29 @@ Share of voiced frames within 50 cents of the truth (RPA):
 
 | Condition | **vocalika** | pyin (before) | rmvpe | fcpe | torchcrepe | basic-pitch |
 |---|---|---|---|---|---|---|
-| vocadito | **0.982** | 0.860 | 0.984 | 0.988 | 0.983 | 0.572 |
-| vocadito-band-demucs | **0.957** | 0.850 | 0.963 | 0.962 | 0.951 | 0.541 |
-| csd-lead6 | **0.840** | 0.294 | 0.553 | 0.360 | 0.652 | 0.339 |
-| csd-lowlead6 | **0.956** | 0.489 | 0.961 | 0.954 | 0.950 | 0.440 |
-| csd-duet0 | 0.111* | 0.094 | 0.178 | 0.147 | 0.199 | 0.238 |
-| csd-satb6 | 0.324 | 0.042 | 0.349 | 0.088 | 0.239 | 0.227 |
+| vocadito | **0.982** | 0.860 | 0.984 | 0.988 | 0.983 | 0.835 |
+| vocadito-band-demucs | **0.957** | 0.850 | 0.963 | 0.962 | 0.951 | 0.790 |
+| csd-lead6 | **0.840** | 0.294 | 0.553 | 0.360 | 0.652 | 0.543 |
+| csd-lowlead6 | **0.956** | 0.489 | 0.961 | 0.954 | 0.950 | 0.694 |
+| csd-duet0 | 0.111* | 0.094 | 0.178 | 0.147 | 0.199 | 0.382 |
+| csd-satb6 | 0.324 | 0.042 | 0.349 | 0.088 | 0.239 | 0.373 |
 
-Median error on solo / separated-from-band: vocalika 3.1 / 3.9 cents, pyin
-11.1 / 11.6. Speed on CPU, as multiples of real time: vocalika 26x (two RMVPE
-passes), rmvpe 56x, fcpe 123x, pyin 9x, basic-pitch 7x, torchcrepe 0.7x.
+Median error on solo / separated-from-band: vocalika 3.1 / 3.9 cents,
+basic-pitch 6.7 / 7.5, torchcrepe 8.8 / 9.4, pyin 11.1 / 11.6. Speed on CPU,
+as multiples of real time: vocalika 26x (two RMVPE passes), rmvpe 56x, fcpe
+123x, basic-pitch 14x, pyin 9x, torchcrepe 0.7x.
+
+basic-pitch is a polyphonic note transcriber, read here as a melody tracker by
+taking its strongest contour bin. Most of its gap is voicing: it misses ~14%
+of sung frames, but 97% of the pitch it does report is within 50 cents, and it
+reports pitch where nobody sings far less often than any other tracker (6-9%
+of unvoiced frames on solo and separated audio, against 24-28% for vocalika).
+That makes it a candidate cross-check for voicing, not a replacement.
+
+An earlier version of this table understated basic-pitch (0.57 on Vocadito):
+the wrapper read its contour bins one step (33 cents) too high and used the
+nominal 256-sample hop instead of the model's real ~254.9, which drifts
+~130 ms out of time over 30 s. Both are fixed in `basic_pitch_worker.py`.
 
 `vocalika` is the shipped path: RMVPE, second-voice recovery, the louder
 voice, and cleaning. `rmvpe` alone follows the lower of two voices, which is
