@@ -236,6 +236,36 @@ async def test_a_project_can_be_renamed_and_the_new_name_persists(tmp_path: Path
 
 
 @pytest.mark.anyio
+async def test_a_deleted_project_is_gone_with_its_files(tmp_path: Path) -> None:
+    reference_bytes = _wav_bytes(tmp_path / "reference.wav")
+    projects = tmp_path / "projects"
+    app = create_app(None, projects_directory=projects, library_directory=tmp_path / "analyses")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ids = []
+        for title in ("Keep me", "Delete me"):
+            created = await client.post(
+                "/api/projects",
+                data={"title": title, "reference_is_vocal": "true"},
+                files={"reference_file": ("reference.wav", reference_bytes, "audio/wav")},
+            )
+            ids.append(created.json()["project"]["id"])
+        kept_id, deleted_id = ids
+
+        deleted = await client.delete(f"/api/projects/{deleted_id}")
+        assert deleted.status_code == 200
+        assert deleted.json() == {"deleted": deleted_id}
+        assert not (projects / deleted_id).exists()
+        assert (projects / kept_id / "project.json").exists()
+
+        listed = await client.get("/api/projects")
+        assert [p["title"] for p in listed.json()["projects"]] == ["Keep me"]
+        assert (await client.get(f"/api/projects/{deleted_id}")).status_code == 404
+        assert (await client.delete(f"/api/projects/{deleted_id}")).status_code == 404
+        assert (await client.delete("/api/projects/not-a-project")).status_code == 404
+
+
+@pytest.mark.anyio
 async def test_a_blank_rename_keeps_the_existing_name(tmp_path: Path) -> None:
     """A project is found by name, so it must never become nameless."""
     reference_bytes = _wav_bytes(tmp_path / "reference.wav")

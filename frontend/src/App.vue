@@ -23,6 +23,7 @@ const {
   error,
   createProject,
   updateProject,
+  deleteProject,
   addTake,
   deleteTake,
   reanalyzeTake,
@@ -91,6 +92,16 @@ function closeProject(): void {
 async function handleCreate(input: NewProjectInput): Promise<void> {
   try {
     openProject(await createProject(input))
+  } catch {
+    // useProjects exposes the user-facing error.
+  }
+}
+
+async function handleDeleteProject(): Promise<void> {
+  if (!selectedProject.value) return
+  try {
+    await deleteProject(selectedProject.value.id)
+    closeProject()
   } catch {
     // useProjects exposes the user-facing error.
   }
@@ -353,7 +364,7 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
           </nav>
         </section>
 
-        <ReferenceView v-if="activeTab === 'reference'" :project="selectedProject" @update="handleUpdate" />
+        <ReferenceView v-if="activeTab === 'reference'" :project="selectedProject" @update="handleUpdate" @delete="handleDeleteProject" />
         <PracticeView v-else-if="activeTab === 'practice'" :project="selectedProject" />
         <TakesView
           v-else-if="activeTab === 'takes'"

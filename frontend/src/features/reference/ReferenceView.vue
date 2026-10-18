@@ -13,7 +13,14 @@ import type { Project, ReferenceVoice, WaveformEnvelope } from "../../shared/typ
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{
   update: [settings: Partial<Pick<Project, "trim_start_seconds" | "trim_end_seconds" | "transpose_semitones" | "reference_voice" | "lyrics">>]
+  delete: []
 }>()
+
+const confirmingDelete = ref(false)
+const takesClause = computed(() => {
+  const count = props.project.takes.length
+  return count ? ` and its ${count} take${count === 1 ? "" : "s"}` : ""
+})
 
 const stem = ref<"vocal" | "instrumental" | "mix">("vocal")
 const vocalLevel = ref(70)
@@ -520,6 +527,26 @@ onBeforeUnmount(stop)
         <div><span>Vocal stem</span><b>READY</b></div>
         <div><span>Instrumental stem</span><b>{{ project.reference.instrumental_path ? "READY" : "N/A" }}</b></div>
         <p>Prepared stems are reused by every take and by future exports.</p>
+      </section>
+      <section class="feature-panel compact-panel danger-zone">
+        <p class="mono-eyebrow">DANGER ZONE</p>
+        <template v-if="!confirmingDelete">
+          <p class="feature-note">
+            Deleting removes the reference, its stems and every take from disk. It cannot be undone.
+          </p>
+          <button type="button" class="danger-button" @click="confirmingDelete = true">
+            DELETE PROJECT…
+          </button>
+        </template>
+        <template v-else>
+          <p class="feature-note danger-warning">
+            Delete “{{ project.title }}”{{ takesClause }}? This cannot be undone.
+          </p>
+          <div class="danger-actions">
+            <button type="button" class="ghost-button compact" @click="confirmingDelete = false">CANCEL</button>
+            <button type="button" class="danger-button armed" @click="emit('delete')">DELETE</button>
+          </div>
+        </template>
       </section>
     </aside>
   </div>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 from threading import RLock
@@ -44,6 +45,17 @@ class ProjectRepository:
             except (TypeError, ValueError, json.JSONDecodeError):
                 continue
         return sorted(projects, key=lambda project: project.updated_at, reverse=True)
+
+    def delete(self, project_id: str) -> None:
+        with self._lock:
+            directory = self.project_directory(project_id)
+            try:
+                # Removing the manifest first drops the project from the list at
+                # once, even if the media below fails to delete.
+                (directory / "project.json").unlink()
+            except FileNotFoundError as error:
+                raise ProjectNotFoundError(f"Project not found: {project_id}") from error
+            shutil.rmtree(directory)
 
     def save(self, project: Project) -> Project:
         with self._lock:

@@ -126,6 +126,16 @@ def create_projects_router(service: ProjectService) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(error)) from error
         return {"project": _project_payload(project)}
 
+    @router.delete("/{project_id}")
+    async def delete_project(project_id: str) -> dict[str, str]:
+        try:
+            await run_in_threadpool(service.repository.delete, project_id)
+        except ProjectNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except OSError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return {"deleted": project_id}
+
     @router.post("/{project_id}/takes")
     async def add_take(
         project_id: str,

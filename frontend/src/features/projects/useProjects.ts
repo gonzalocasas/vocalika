@@ -142,6 +142,20 @@ export function useProjects() {
     }
   }
 
+  async function deleteProject(projectId: string): Promise<void> {
+    busy.value = true
+    error.value = ""
+    try {
+      await apiJson<{ deleted: string }>(`/api/projects/${projectId}`, { method: "DELETE" })
+      projects.value = projects.value.filter((project) => project.id !== projectId)
+    } catch (reason) {
+      error.value = reason instanceof Error ? reason.message : String(reason)
+      throw reason
+    } finally {
+      busy.value = false
+    }
+  }
+
   onMounted(() => void refresh().catch((reason) => {
     error.value = reason instanceof Error ? reason.message : String(reason)
   }))
@@ -154,6 +168,7 @@ export function useProjects() {
     refresh,
     createProject,
     updateProject,
+    deleteProject,
     addTake,
     deleteTake,
     reanalyzeTake,
