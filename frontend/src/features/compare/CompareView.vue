@@ -438,8 +438,8 @@ onBeforeUnmount(() => {
         @select="selectPhrase"
       />
       <div class="transport-row"><button :class="{ active: activePlayer === 'reference' }" @click="play('reference')">▶ REFERENCE VOCAL</button><button :class="{ active: activePlayer === 'mix' }" @click="play('mix')">▶ ORIGINAL MIX</button><button :class="{ active: activePlayer === 'take' }" @click="play('take')">▶ MY TAKE</button><button @click="playAB">A / B</button><button :class="{ active: looping }" @click="looping = !looping">LOOP</button><button @click="stopAudio">■ STOP</button></div>
-      <audio ref="referenceAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?transpose=${take.reference_transpose_semitones ?? 0}`"></audio>
-      <audio ref="mixAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/mix?transpose=${take.reference_transpose_semitones ?? 0}`"></audio>
+      <audio ref="referenceAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${take.reference_transpose_semitones ?? 0}`"></audio>
+      <audio ref="mixAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/mix?v=${project.updated_at}&transpose=${take.reference_transpose_semitones ?? 0}`"></audio>
       <audio ref="takeAudio" preload="metadata" :src="`/api/projects/${project.id}/takes/${take.id}/audio/vocal`"></audio>
     </section>
   </section>

@@ -229,7 +229,9 @@ def create_projects_router(service: ProjectService) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(error)) from error
         if not value.is_file():
             raise HTTPException(status_code=404, detail=f"Reference {kind} is unavailable.")
-        return FileResponse(value)
+        # A transposed file is re-rendered in place when found stale, behind the
+        # same URL; without this the browser may keep playing its old copy.
+        return FileResponse(value, headers={"Cache-Control": "no-cache"})
 
     @router.get("/{project_id}/waveform/{kind}")
     async def reference_waveform(

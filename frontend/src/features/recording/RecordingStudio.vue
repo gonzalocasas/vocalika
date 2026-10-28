@@ -385,12 +385,12 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
         </aside>
       </div>
 
-      <audio ref="vocalAudio" preload="auto" :src="`/api/projects/${project.id}/audio/vocal?transpose=${project.transpose_semitones}`"></audio>
+      <audio ref="vocalAudio" preload="auto" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${project.transpose_semitones}`"></audio>
       <audio
         v-if="project.reference.instrumental_path"
         ref="instrumentalAudio"
         preload="auto"
-        :src="`/api/projects/${project.id}/audio/instrumental?transpose=${project.transpose_semitones}`"
+        :src="`/api/projects/${project.id}/audio/instrumental?v=${project.updated_at}&transpose=${project.transpose_semitones}`"
       ></audio>
     </section>
   </div>

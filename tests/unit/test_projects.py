@@ -118,7 +118,9 @@ async def test_projects_and_unanalyzed_takes_persist_across_app_instances(tmp_pa
         assert len(listing) == 1
         assert listing[0]["takes"][0]["name"] == "Morning take"
         assert listing[0]["lyrics"] == "First verse\nSecond line"
-        assert (await client.get(f"/api/projects/{project_id}/audio/vocal")).status_code == 200
+        vocal = await client.get(f"/api/projects/{project_id}/audio/vocal")
+        assert vocal.status_code == 200
+        assert vocal.headers["cache-control"] == "no-cache"
 
 
 @pytest.mark.anyio
