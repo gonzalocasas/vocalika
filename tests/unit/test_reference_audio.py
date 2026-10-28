@@ -103,3 +103,46 @@ def test_transposition_uses_the_file_rate_not_the_declared_one(tmp_path: Path) -
         "the pitch must land where the transposition asked, not scaled by the "
         "ratio between the declared and actual rates"
     )
+
+
+def test_a_cached_transposition_of_the_wrong_length_is_rendered_again(tmp_path: Path) -> None:
+    """Stems rendered before the sample-rate fix stayed cached, short and sharp.
+
+    The cache returned any existing file, so those stems kept playing against
+    lyrics timed on the full-length vocal. A cached file whose length does not
+    match its source is stale and must be replaced.
+    """
+    sample_rate = 16_000
+    duration = 2.0
+    source = tmp_path / "reference.wav"
+    times = np.arange(round(duration * sample_rate), dtype=np.float32) / sample_rate
+    sf.write(source, 0.2 * np.sin(2 * np.pi * 440 * times), sample_rate)
+    repository = ProjectRepository(tmp_path / "projects")
+    project = Project(
+        id="e" * 32,
+        title="Stale cache",
+        created_at="2026-10-28T23:00:00Z",
+        updated_at="2026-10-28T23:00:00Z",
+        reference=ProjectReference(
+            title="Reference",
+            source_type="local",
+            source_url=None,
+            original_path=str(source),
+            vocal_path=str(source),
+            instrumental_path=str(source),
+            duration_seconds=duration,
+            sample_rate=sample_rate,
+            separation_model="test",
+            separation_cached=False,
+        ),
+    )
+    repository.save(project)
+    stale = repository.project_directory(project.id) / "reference" / "transposed" / "vocal_-4.flac"
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(stale, np.zeros(round(duration * 0.91 * sample_rate), dtype=np.float32), sample_rate)
+
+    rendered = ReferenceAudioService(repository).resolve(project, "vocal", -4)
+    samples, rendered_rate = sf.read(rendered, dtype="float32")
+
+    assert rendered == stale
+    assert len(samples) / rendered_rate == pytest.approx(duration, abs=0.05)
