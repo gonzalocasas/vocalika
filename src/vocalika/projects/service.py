@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from vocalika.audio.separation import DemucsVocalSeparator
@@ -55,7 +55,11 @@ class ProjectService:
         *,
         title: str | None = None,
         reference_is_vocal: bool = False,
+        reference_kind: Literal["mix", "vocal", "instrumental"] | None = None,
     ) -> Project:
+        kind = reference_kind or ("vocal" if reference_is_vocal else "mix")
+        if kind not in ("mix", "vocal", "instrumental"):
+            raise ValueError("Invalid reference kind")
         directory = self.repository.project_directory(project_id)
         if is_youtube_url(str(reference_value)):
             source = YouTubeAudioSource(str(reference_value), self.cache).acquire()
@@ -67,9 +71,9 @@ class ProjectService:
         suffix = source.path.suffix.lower() or ".audio"
         original = _copy_media(source.path, directory / "reference" / f"original{suffix}")
         separation = None
-        vocal = original
-        instrumental: Path | None = None
-        if not reference_is_vocal:
+        vocal = None if kind == "instrumental" else original
+        instrumental: Path | None = original if kind == "instrumental" else None
+        if kind == "mix":
             separation = DemucsVocalSeparator(self.cache).separate(source)
             vocal = _copy_media(separation.vocals, directory / "reference" / "vocals.wav")
             if separation.accompaniment is not None:
@@ -89,7 +93,7 @@ class ProjectService:
                 source_type="youtube" if source.source_url else "local",
                 source_url=source.source_url,
                 original_path=str(original),
-                vocal_path=str(vocal),
+                vocal_path=str(vocal) if vocal else None,
                 instrumental_path=str(instrumental) if instrumental else None,
                 duration_seconds=source.duration_seconds,
                 sample_rate=source.sample_rate,
@@ -175,7 +179,7 @@ class ProjectService:
                 updated_at=_now(),
             ),
         )
-        if not analyze:
+        if not analyze or project.reference.vocal_path is None:
             return project, take, None
         return self.analyze_take(project_id, take_id)
 
@@ -185,6 +189,11 @@ class ProjectService:
         take_id: str,
     ) -> tuple[Project, Take, dict[str, Any]]:
         project = self.repository.load(project_id)
+        reference_pitch_path = project.reference.vocal_path
+        if reference_pitch_path is None:
+            raise ValueError(
+                "Pitch comparison requires a vocal reference; this project is instrumental-only"
+            )
         try:
             take = next(take for take in project.takes if take.id == take_id)
         except StopIteration as error:
@@ -211,7 +220,7 @@ class ProjectService:
                 output,
                 reference_is_vocal=True,
                 reference_mix_path=reference_mix,
-                reference_pitch_path=Path(project.reference.vocal_path),
+                reference_pitch_path=Path(reference_pitch_path),
                 reference_pitch_semitones=take.reference_transpose_semitones,
                 isolate_performance=take.isolate_performance,
                 cache_directory=self.cache.root,

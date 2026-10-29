@@ -170,3 +170,8 @@ described in the [product requirements](docs/PRD-001-MVP.md) and the
 ## License
 
 [MIT](LICENSE)
+
+When importing a project, choose **Mix** to separate vocals and instruments,
+**Vocals only** for an isolated voice, or **Instrumental only** for a prepared
+backing track. Instrumental projects support playback, transposition, recording,
+and export; takes are saved without vocal pitch comparison or lyric alignment.

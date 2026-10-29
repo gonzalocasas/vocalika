@@ -7,7 +7,7 @@ export interface NewProjectInput {
   title: string
   referenceFile: File | null
   referenceUrl: string
-  referenceIsVocal: boolean
+  referenceKind: "mix" | "vocal" | "instrumental"
 }
 
 export function useProjects() {
@@ -28,7 +28,7 @@ export function useProjects() {
     try {
       const body = new FormData()
       if (input.title.trim()) body.append("title", input.title.trim())
-      body.append("reference_is_vocal", String(input.referenceIsVocal))
+      body.append("reference_kind", input.referenceKind)
       if (input.referenceFile) body.append("reference_file", input.referenceFile)
       else body.append("reference_url", input.referenceUrl.trim())
       const payload = await apiJson<{ project: Project }>("/api/projects", {

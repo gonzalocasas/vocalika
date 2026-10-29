@@ -44,6 +44,8 @@ def build_reference_pitch(
     Unvoiced frames are returned as null rather than dropped, so the client
     breaks the line at a rest instead of interpolating across it.
     """
+    if project.reference.vocal_path is None:
+        return {"times": [], "midi": [], "range": None}
     config = config or AnalysisConfig(reference_voice=project.reference_voice)
     # Measured on the untransposed vocal and shifted exactly: see transpose_track.
     vocal_path = Path(reference_audio.resolve(project, "vocal", 0))

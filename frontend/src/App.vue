@@ -169,10 +169,10 @@ async function handleUpdate(
 async function handleTake(file: File, isolate: boolean): Promise<void> {
   if (!selectedProject.value) return
   try {
-    const result = await addTake(selectedProject.value.id, file, isolate, true)
+    const result = await addTake(selectedProject.value.id, file, isolate, Boolean(selectedProject.value.reference.vocal_path))
     selectedTakeId.value = result.take.id
     artifact.value = result.artifact
-    activeTab.value = "compare"
+    activeTab.value = result.artifact ? "compare" : "takes"
     writeRoute()
   } catch {
     // useProjects exposes the user-facing error.

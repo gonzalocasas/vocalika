@@ -74,7 +74,7 @@ export interface ProjectReference {
   source_type: "youtube" | "local"
   source_url: string | null
   original_path: string
-  vocal_path: string
+  vocal_path: string | null
   instrumental_path: string | null
   duration_seconds: number
   sample_rate: number

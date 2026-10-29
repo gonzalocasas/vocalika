@@ -369,14 +369,14 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
 
           <template v-if="recorder.recordedFile.value">
             <audio class="recorded-preview" controls :src="recordedUrl"></audio>
-            <label class="check-row"><input v-model="isolate" type="checkbox" /> Isolate my vocal first</label>
+            <label v-if="project.reference.vocal_path" class="check-row"><input v-model="isolate" type="checkbox" /> Isolate my vocal first</label>
             <button class="accent-button full" :disabled="busy" @click="analyze">
-              {{ busy ? "ANALYZING…" : "SAVE & ANALYZE TAKE →" }}
+              {{ busy ? "SAVING…" : project.reference.vocal_path ? "SAVE & ANALYZE TAKE →" : "SAVE TAKE →" }}
             </button>
             <button class="text-button" @click="recorder.discard">DISCARD & RECORD AGAIN</button>
           </template>
 
-          <label class="monitor-slider">
+          <label v-if="project.reference.vocal_path" class="monitor-slider">
             <span>REFERENCE VOICE <b>{{ voiceLevel }}%</b></span>
             <input v-model.number="voiceLevel" type="range" min="0" max="100" />
             <small>Adjust live · 0% is karaoke · instrumental stays at full level</small>
@@ -385,7 +385,7 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
         </aside>
       </div>
 
-      <audio ref="vocalAudio" preload="auto" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${project.transpose_semitones}`"></audio>
+      <audio v-if="project.reference.vocal_path" ref="vocalAudio" preload="auto" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${project.transpose_semitones}`"></audio>
       <audio
         v-if="project.reference.instrumental_path"
         ref="instrumentalAudio"

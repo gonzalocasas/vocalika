@@ -82,6 +82,7 @@ def create_projects_router(service: ProjectService) -> APIRouter:
         reference_url: Annotated[str | None, Form()] = None,
         title: Annotated[str | None, Form()] = None,
         reference_is_vocal: Annotated[bool, Form()] = False,
+        reference_kind: Annotated[Literal["mix", "vocal", "instrumental"] | None, Form()] = None,
     ) -> dict[str, Any]:
         normalized_url = (reference_url or "").strip()
         if bool(reference_file) == bool(normalized_url):
@@ -106,6 +107,7 @@ def create_projects_router(service: ProjectService) -> APIRouter:
                 reference_value,
                 title=title,
                 reference_is_vocal=reference_is_vocal,
+                reference_kind=reference_kind,
             )
         except Exception as error:
             raise HTTPException(status_code=422, detail=str(error)) from error

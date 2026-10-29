@@ -20,7 +20,7 @@ export function useLyricsTiming(project: Ref<Project>, lyrics: Ref<string>, time
 
   async function load(): Promise<void> {
     const current = ++request
-    if (!project.value.lyrics.trim()) {
+    if (!project.value.lyrics.trim() || !project.value.reference.vocal_path) {
       timing.value = null
       state.value = "idle"
       return

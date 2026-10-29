@@ -12,7 +12,7 @@ class ProjectReference:
     source_type: Literal["youtube", "local"]
     source_url: str | None
     original_path: str
-    vocal_path: str
+    vocal_path: str | None
     instrumental_path: str | None
     duration_seconds: float
     sample_rate: int

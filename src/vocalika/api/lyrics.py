@@ -41,6 +41,8 @@ def build_lyrics_timing(
     request for a given text pays for the alignment (some seconds per song);
     a lock keeps a second request for the same text from paying again.
     """
+    if project.reference.vocal_path is None:
+        return {"version": ALIGNMENT_VERSION, "aligner": "unavailable", "lines": []}
     aligner = aligner or MmsLyricsAligner()
     if not project.lyrics.strip():
         return {"version": ALIGNMENT_VERSION, "aligner": aligner.name, "lines": []}

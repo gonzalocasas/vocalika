@@ -22,7 +22,7 @@ const takesClause = computed(() => {
   return count ? ` and its ${count} take${count === 1 ? "" : "s"}` : ""
 })
 
-const stem = ref<"vocal" | "instrumental" | "mix">("vocal")
+const stem = ref<"vocal" | "instrumental" | "mix">(props.project.reference.vocal_path ? "vocal" : "instrumental")
 const vocalLevel = ref(70)
 const trimStart = ref(props.project.trim_start_seconds)
 const trimEnd = ref(props.project.trim_end_seconds ?? props.project.reference.duration_seconds)
@@ -351,14 +351,14 @@ onBeforeUnmount(stop)
       <div class="feature-heading">
         <div><p class="mono-eyebrow accent-text">STEM VIEW</p><h2>{{ stemTitle }}</h2></div>
         <div class="segmented graphite-segmented">
-          <button :class="{ active: stem === 'vocal' }" @click="stem = 'vocal'">VOCAL</button>
+          <button :disabled="!project.reference.vocal_path" :class="{ active: stem === 'vocal' }" @click="stem = 'vocal'">VOCAL</button>
           <button
             :disabled="!project.reference.instrumental_path"
             :class="{ active: stem === 'instrumental' }"
             @click="stem = 'instrumental'"
           >INSTRUMENTAL</button>
           <button
-            :disabled="!project.reference.instrumental_path"
+            :disabled="!project.reference.instrumental_path || !project.reference.vocal_path"
             :class="{ active: stem === 'mix' }"
             @click="stem = 'mix'"
           >MIX</button>
@@ -400,7 +400,7 @@ onBeforeUnmount(stop)
         <button v-if="playing || paused" class="ghost-button compact" @click="stop">■ STOP</button>
         <span>{{ formatTime(playhead) }} / {{ formatTime(duration) }}</span>
       </div>
-      <audio ref="vocalAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${transpose}`"></audio>
+      <audio v-if="project.reference.vocal_path" ref="vocalAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${transpose}`"></audio>
       <audio
         v-if="project.reference.instrumental_path"
         ref="instrumentalAudio"
@@ -506,7 +506,7 @@ onBeforeUnmount(stop)
         </div>
         <p class="feature-note">Applied to preview and recording playback. New takes remember this key for analysis and export.</p>
       </section>
-      <section class="feature-panel compact-panel">
+      <section v-if="project.reference.vocal_path" class="feature-panel compact-panel">
         <p class="mono-eyebrow accent-text">MELODY VOICE</p>
         <div class="segmented graphite-segmented voice-choice">
           <button
@@ -524,7 +524,7 @@ onBeforeUnmount(stop)
       </section>
       <section class="feature-panel compact-panel status-card">
         <p class="mono-eyebrow accent-text">SEPARATION</p>
-        <div><span>Vocal stem</span><b>READY</b></div>
+        <div><span>Vocal stem</span><b>{{ project.reference.vocal_path ? "READY" : "N/A" }}</b></div>
         <div><span>Instrumental stem</span><b>{{ project.reference.instrumental_path ? "READY" : "N/A" }}</b></div>
         <p>Prepared stems are reused by every take and by future exports.</p>
       </section>

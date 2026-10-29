@@ -68,6 +68,7 @@ function requestDelete(take: Take): void {
         </button>
         <div class="take-actions">
           <button
+            v-if="project.reference.vocal_path"
             class="take-reanalyze"
             :class="{ stale: voiceChanged(take) }"
             :disabled="busy"
@@ -93,6 +94,7 @@ function requestDelete(take: Take): void {
     </section>
 
     <aside class="take-tools">
+      <p v-if="!project.reference.vocal_path" class="feature-note">Instrumental backing track: takes are saved without pitch comparison.</p>
       <section class="add-take-panel">
         <p class="mono-eyebrow accent-text">ADD A TAKE</p>
         <label class="drop-target compact-drop">
@@ -100,9 +102,9 @@ function requestDelete(take: Take): void {
           <small>FLAC from Ableton preferred</small>
           <input type="file" accept="audio/*" @change="chooseFile" />
         </label>
-        <label class="check-row"><input v-model="isolate" type="checkbox" /> Isolate my vocal from instruments first</label>
+        <label v-if="project.reference.vocal_path" class="check-row"><input v-model="isolate" type="checkbox" /> Isolate my vocal from instruments first</label>
         <button class="solid-button full" :disabled="!file || busy" @click="submitUpload">
-          {{ busy ? "ANALYZING…" : "ANALYZE TAKE" }}
+          {{ busy ? "SAVING…" : project.reference.vocal_path ? "ANALYZE TAKE" : "SAVE TAKE" }}
         </button>
       </section>
       <section class="add-take-panel record-launcher">

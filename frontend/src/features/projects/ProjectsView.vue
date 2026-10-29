@@ -15,7 +15,7 @@ const sourceMode = ref<"file" | "url">("file")
 const title = ref("")
 const referenceFile = ref<File | null>(null)
 const referenceUrl = ref("")
-const referenceIsVocal = ref(false)
+const referenceKind = ref<"mix" | "vocal" | "instrumental">("mix")
 const canCreate = computed(() => sourceMode.value === "file"
   ? referenceFile.value !== null
   : referenceUrl.value.trim().length > 0)
@@ -30,7 +30,7 @@ function submit(): void {
     title: title.value,
     referenceFile: sourceMode.value === "file" ? referenceFile.value : null,
     referenceUrl: sourceMode.value === "url" ? referenceUrl.value : "",
-    referenceIsVocal: referenceIsVocal.value,
+    referenceKind: referenceKind.value,
   })
 }
 
@@ -78,7 +78,7 @@ function bestMae(project: Project): string {
       <div>
         <p class="mono-eyebrow accent-text">START A PROJECT</p>
         <h2>Prepare a reference</h2>
-        <p>Vocalika stores the source and prepares reusable vocal and instrumental stems.</p>
+        <p>Choose what your audio contains. Mixes are separated; existing stems are imported directly.</p>
       </div>
       <div class="creator-form">
         <div class="segmented graphite-segmented">
@@ -98,12 +98,28 @@ function bestMae(project: Project): string {
           type="url"
           placeholder="https://www.youtube.com/watch?v=…"
         />
-        <label class="check-row">
-          <input v-model="referenceIsVocal" type="checkbox" />
-          This reference is already an isolated vocal
-        </label>
+        <fieldset class="reference-kind">
+          <legend class="range-label">AUDIO CONTENT</legend>
+          <div class="reference-kind-toggle">
+            <label v-for="option in [
+              { value: 'mix', label: 'MIX' },
+              { value: 'vocal', label: 'VOCALS ONLY' },
+              { value: 'instrumental', label: 'INSTRUMENTAL' },
+            ]" :key="option.value">
+              <input v-model="referenceKind" type="radio" name="reference-kind" :value="option.value" />
+              <span>{{ option.label }}</span>
+            </label>
+          </div>
+        </fieldset>
+        <p class="feature-note">
+          {{ referenceKind === 'mix'
+            ? 'Vocals and instruments together. We’ll separate them into reusable stems.'
+            : referenceKind === 'vocal'
+            ? 'An isolated voice. Ready to use for vocal pitch comparison.'
+            : 'A backing track for recording. Pitch comparison requires a vocal reference.' }}
+        </p>
         <button class="accent-button" :disabled="!canCreate || busy" @click="submit">
-          {{ busy ? "PREPARING STEMS…" : "PREPARE →" }}
+          {{ busy ? "PREPARING…" : "PREPARE →" }}
         </button>
       </div>
     </section>

@@ -359,3 +359,51 @@ def test_projects_saved_before_the_voice_choice_still_load(tmp_path: Path) -> No
         "takes": [],
     }
     assert Project.from_dict(payload).reference_voice == "louder"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kind", ["vocal", "instrumental"])
+async def test_separated_reference_imports_skip_separation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+) -> None:
+    from vocalika.audio.separation import DemucsVocalSeparator
+    from vocalika.projects.service import ProjectService
+
+    def unexpected(*args: object, **kwargs: object) -> None:
+        pytest.fail("Separated references must not run separation or pitch analysis")
+
+    monkeypatch.setattr(DemucsVocalSeparator, "separate", unexpected)
+    app = create_app(
+        None,
+        projects_directory=tmp_path / "projects",
+        cache_directory=tmp_path / "cache",
+    )
+    audio = _wav_bytes(tmp_path / "source.wav")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/projects",
+            data={"reference_kind": kind},
+            files={"reference_file": ("source.wav", audio, "audio/wav")},
+        )
+        assert response.status_code == 200
+        project = response.json()["project"]
+        reference = project["reference"]
+        assert reference[f"{kind}_path"] == reference["original_path"]
+        assert reference["instrumental_path" if kind == "vocal" else "vocal_path"] is None
+        project_id = project["id"]
+        assert (await client.get(f"/api/projects/{project_id}/audio/{kind}")).status_code == 200
+        if kind == "instrumental":
+            monkeypatch.setattr(ProjectService, "analyze_take", unexpected)
+            take = await client.post(
+                f"/api/projects/{project_id}/takes",
+                files={"audio_file": ("take.wav", audio, "audio/wav")},
+            )
+            assert take.status_code == 200
+            assert take.json()["take"]["status"] == "ready"
+            assert take.json()["artifact"] is None
+            pitch = await client.get(f"/api/projects/{project_id}/reference/pitch")
+            assert pitch.status_code == 200
+            assert pitch.json() == {"times": [], "midi": [], "range": None}
+            assert (await client.get(f"/api/projects/{project_id}/audio/vocal")).status_code == 422
