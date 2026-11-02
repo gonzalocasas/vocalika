@@ -12,9 +12,11 @@ import { useLyricsTiming } from "../reference/useLyricsTiming"
 import { useLivePitch } from "./useLivePitch"
 import { useMicrophoneRecorder } from "./useMicrophoneRecorder"
 
+import { recordingOffset, timingIsConsistent } from "./recordingTiming"
+
 const props = defineProps<{ project: Project; busy: boolean }>()
 const emit = defineEmits<{
-  submit: [file: File, isolate: boolean]
+  submit: [file: File, isolate: boolean, recordingOffset: number]
   updateLyrics: [lyrics: string]
   close: []
 }>()
@@ -32,6 +34,29 @@ const instrumentalAudio = ref<HTMLAudioElement | null>(null)
 const recorder = useMicrophoneRecorder()
 const livePitch = useLivePitch()
 const recordedUrl = ref("")
+const capturedOffset = ref<number | null>(null)
+const timingError = ref("")
+let timingTimer: number | undefined
+
+function checkRecordingTiming(): void {
+  const reference = instrumentalAudio.value ?? vocalAudio.value
+  if (capturedOffset.value === null || !reference || recorder.state.value !== "recording") return
+  const other = instrumentalAudio.value && vocalAudio.value ? vocalAudio.value.currentTime : undefined
+  if (!timingIsConsistent(capturedOffset.value, recorder.readElapsed(), reference.currentTime, other)) {
+    timingError.value = "Recording stopped because the backing track lost sync. Please record a new take."
+    stopRecording()
+  }
+}
+
+function clearTimingCheck(): void {
+  if (timingTimer !== undefined) window.clearInterval(timingTimer)
+  timingTimer = undefined
+}
+
+function startTimingCheck(): void {
+  clearTimingCheck()
+  timingTimer = window.setInterval(checkRecordingTiming, 100)
+}
 const contour = ref<ReferenceContour | null>(null)
 const monitorTime = ref(0)
 const lyricsView = ref<HTMLElement | null>(null)
@@ -183,6 +208,8 @@ async function startRecording(): Promise<void> {
   // of them while singing.
   editingLyrics.value = false
   livePitch.reset()
+  capturedOffset.value = null
+  timingError.value = ""
   await recorder.start()
   if (recorder.state.value !== "recording") return
   const start = props.project.trim_start_seconds
@@ -197,34 +224,58 @@ async function startRecording(): Promise<void> {
   if (lyricsView.value) lyricsView.value.scrollTop = 0
   easedScrollTop = Number.NaN
   suspendScrollUntil = 0
-  await playMonitor()
-  armStopTimer()
-  await startLivePitch()
+  try {
+    await playMonitor()
+    const reference = instrumentalAudio.value ?? vocalAudio.value
+    if (!reference) throw new Error("Backing track is unavailable.")
+    capturedOffset.value = recordingOffset(recorder.readElapsed(), reference.currentTime)
+    startTimingCheck()
+    armStopTimer()
+    await startLivePitch()
+  } catch (reason) {
+    timingError.value = reason instanceof Error ? reason.message : String(reason)
+    stopRecording()
+  }
 }
 
 function pauseRecording(): void {
   // The recorder and the reference have to stop together, or the take would
   // resume misaligned against the contour it is scored on.
+  checkRecordingTiming()
+  if (timingError.value) return
+  clearTimingCheck()
   recorder.pause()
   stopMonitor()
   livePitch.stop()
 }
 
 async function resumeRecording(): Promise<void> {
-  await playMonitor()
-  recorder.resume()
-  armStopTimer()
-  await startLivePitch()
+  try {
+    await playMonitor()
+    recorder.resume()
+    // Never re-anchor on resume: that would hide a pause/resume timing error.
+    checkRecordingTiming()
+    if (timingError.value || recorder.state.value !== "recording") return
+    startTimingCheck()
+    armStopTimer()
+    await startLivePitch()
+  } catch (reason) {
+    timingError.value = reason instanceof Error ? reason.message : String(reason)
+    stopRecording()
+  }
 }
 
 function stopRecording(): void {
+  clearTimingCheck()
   stopMonitor()
   livePitch.stop()
   recorder.stop()
 }
 
 function analyze(): void {
-  if (recorder.recordedFile.value) emit("submit", recorder.recordedFile.value, isolate.value)
+  if (recorder.recordedFile.value && capturedOffset.value !== null && !timingError.value) {
+    emit("submit", recorder.recordedFile.value, isolate.value, capturedOffset.value)
+  }
 }
 
 function requestClose(): void {
@@ -262,6 +313,7 @@ onMounted(() => {
 })
 watch(() => [props.project.id, props.project.transpose_semitones, props.project.reference_voice], loadContour)
 onBeforeUnmount(() => {
+  clearTimingCheck()
   stopMonitor()
   livePitch.stop()
   if (recordedUrl.value) window.URL.revokeObjectURL(recordedUrl.value)
@@ -353,12 +405,13 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
           <div class="record-readout" :class="{ live: recording, held: paused }">
             <i></i><span>{{ recording ? "RECORDING" : paused ? "PAUSED" : "MIC READY" }}</span><strong>{{ timecode }}</strong>
           </div>
+          <p v-if="timingError" class="inline-error">{{ timingError }}</p>
           <p v-if="recorder.error.value" class="inline-error">{{ recorder.error.value }}</p>
 
           <button
             v-if="!inTake && !recorder.recordedFile.value"
             class="record-button"
-            :disabled="!recorder.supported.value"
+            :disabled="!recorder.supported.value || recorder.state.value === 'requesting'"
             @click="startRecording"
           >● START RECORDING</button>
           <div v-else-if="inTake" class="take-transport">
@@ -370,7 +423,7 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
           <template v-if="recorder.recordedFile.value">
             <audio class="recorded-preview" controls :src="recordedUrl"></audio>
             <label v-if="project.reference.vocal_path" class="check-row"><input v-model="isolate" type="checkbox" /> Isolate my vocal first</label>
-            <button class="accent-button full" :disabled="busy" @click="analyze">
+            <button class="accent-button full" :disabled="busy || !!timingError || capturedOffset === null" @click="analyze">
               {{ busy ? "SAVING…" : project.reference.vocal_path ? "SAVE & ANALYZE TAKE →" : "SAVE TAKE →" }}
             </button>
             <button class="text-button" @click="recorder.discard">DISCARD & RECORD AGAIN</button>

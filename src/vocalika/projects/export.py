@@ -16,6 +16,7 @@ from vocalika.models.artifact import load_artifact
 from vocalika.projects.models import Project, Take
 from vocalika.projects.reference_audio import ReferenceAudioService
 from vocalika.projects.repository import ProjectRepository
+from vocalika.projects.timing import resolve_timing
 
 FloatAudio = NDArray[np.float32]
 ExportFormat = Literal["mp3", "wav", "flac"]
@@ -81,21 +82,7 @@ def _take_vocal_path(take: Take) -> Path:
 
 
 def _placement_offset_seconds(take: Take) -> float:
-    if take.analysis_path is None:
-        return 0.0
-    artifact = load_artifact(Path(take.analysis_path))
-    alignment = artifact.get("alignment", {})
-    global_offset = alignment.get("global_offset_seconds")
-    confidence = float(alignment.get("global_offset_confidence") or 0.0)
-    if global_offset is not None and np.isfinite(global_offset) and confidence >= 0.25:
-        return float(global_offset)
-    frames = artifact["comparison"]["frames"]
-    reference = np.asarray(frames["reference_time"], dtype=np.float64)
-    performance = np.asarray(frames["performance_time"], dtype=np.float64)
-    finite = np.isfinite(reference) & np.isfinite(performance)
-    if not np.any(finite):
-        return 0.0
-    return float(np.median(performance[finite] - reference[finite]))
+    return resolve_timing(take).offset_seconds
 
 
 def _place_take(
@@ -220,7 +207,12 @@ class ProjectExportService:
                 ((0, output_samples - instrumental_segment.shape[0]), (0, 0)),
             )
 
-        take_audio = _read_audio(_take_vocal_path(take), self.sample_rate)
+        vocal_path = _take_vocal_path(take)
+        take_audio = _read_audio(vocal_path, self.sample_rate)
+        if vocal_path.resolve() != Path(take.source_path).resolve():
+            original = _read_audio(Path(take.source_path), self.sample_rate)
+            if abs(len(original) - len(take_audio)) > round(0.05 * self.sample_rate):
+                raise ValueError("Isolated vocal changed duration; refusing an out-of-sync export")
         take_segment = _place_take(
             take_audio,
             self.sample_rate,

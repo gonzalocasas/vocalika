@@ -36,6 +36,9 @@ class Take:
     analysis_summary: dict[str, Any] | None = None
     error: str | None = None
     reference_transpose_semitones: int = 0
+    # performance_time = reference_time + recording_offset_seconds.
+    # Captured once by the studio; independent of later project trims/analysis.
+    recording_offset_seconds: float | None = None
     # The reference voice the take was last analysed against.
     reference_voice: ReferenceVoice = "louder"
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import shutil
 from collections.abc import Callable
 from dataclasses import replace
@@ -155,8 +156,14 @@ class ProjectService:
         isolate_performance: bool,
         analyze: bool = True,
         take_id: str | None = None,
+        recording_offset_seconds: float | None = None,
     ) -> tuple[Project, Take, dict[str, Any] | None]:
         project = self.repository.load(project_id)
+        if recording_offset_seconds is not None and (
+            not math.isfinite(recording_offset_seconds)
+            or not -project.reference.duration_seconds <= recording_offset_seconds <= 10.0
+        ):
+            raise ValueError("Invalid recording timeline offset")
         take_id = take_id or self.new_id()
         suffix = source_path.suffix.lower() or ".audio"
         stored = _copy_media(
@@ -170,6 +177,7 @@ class ProjectService:
             source_path=str(stored),
             isolate_performance=isolate_performance,
             reference_transpose_semitones=project.transpose_semitones,
+            recording_offset_seconds=recording_offset_seconds,
         )
         project = self.repository.update(
             project_id,

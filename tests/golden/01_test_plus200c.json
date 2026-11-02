@@ -18,23 +18,24 @@
         "seconds": -0.0
       },
       {
-        "confidence": 0.9999566320429965,
+        "confidence": 0.0,
         "method": "smoothed-vocal-envelope-correlation",
         "peak_margin": 0.9999566320429965,
         "raw_correlation": 0.9999566320429965,
         "seconds": -0.0
       }
     ],
-    "global_offset_confidence": 0.9999566320429965,
+    "global_offset_confidence": null,
     "global_offset_error": null,
-    "global_offset_method": "smoothed-vocal-envelope-correlation",
-    "global_offset_peak_margin": 0.9999566320429965,
-    "global_offset_raw_correlation": 0.9999566320429965,
-    "global_offset_seconds": -0.0,
+    "global_offset_method": null,
+    "global_offset_peak_margin": null,
+    "global_offset_raw_correlation": null,
+    "global_offset_seconds": null,
     "method": "audio-offset-plus-open-ended-temporally-regularized-pitch-dtw",
     "point_count": 151,
     "subsequence_alignment_applied": false,
-    "temporal_consistency_weight": 0.0
+    "temporal_consistency_weight": 0.0,
+    "timing_estimator_version": 2
   },
   "comparison": {
     "frames": {

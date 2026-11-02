@@ -8,11 +8,9 @@ import {
 } from "../src/playbackTiming.ts"
 
 test("take playback uses a continuous global offset instead of stepped DTW points", () => {
-  const offset = resolvePlaybackOffset(
-    { global_offset_seconds: 0.2, global_offset_confidence: 0.9 },
-    [0, 1, 1, 1, 2],
-    [0.2, 1.2, 1.3, 1.4, 2.2],
-  )
+  const offset = resolvePlaybackOffset({
+    offset_seconds: 0.2, source: "audio-match", message: "Verified",
+  })
 
   assert.equal(offset, 0.2)
   assert.equal(referenceToPerformanceTime(1, offset), 1.2)
@@ -20,12 +18,12 @@ test("take playback uses a continuous global offset instead of stepped DTW point
   assert.equal(performanceToReferenceTime(1.29, offset), 1.09)
 })
 
-test("take playback falls back to the median aligned offset", () => {
-  const offset = resolvePlaybackOffset(
-    { global_offset_seconds: 8, global_offset_confidence: 0.1 },
-    [0, 1, 2, 3],
-    [0.3, 1.3, 2.4, Number.NaN],
-  )
+test("missing or invalid placement preserves original timing", () => {
+  assert.equal(resolvePlaybackOffset(undefined), 0)
+  assert.equal(resolvePlaybackOffset({ offset_seconds: Number.NaN }), 0)
+})
 
-  assert.ok(Math.abs(offset - 0.3) < 1e-9)
+test("trimmed recording uses the server's captured position", () => {
+  const offset = resolvePlaybackOffset({ offset_seconds: -19.97, source: "recording" })
+  assert.ok(Math.abs(referenceToPerformanceTime(20, offset) - 0.03) < 1e-9)
 })

@@ -28,11 +28,7 @@ const showPerformance = ref(true)
 const showWaveforms = ref(true)
 const showPoints = ref(false)
 const times = props.artifact.comparison.frames.reference_time
-const takePlaybackOffset = resolvePlaybackOffset(
-  props.artifact.alignment,
-  props.artifact.comparison.frames.reference_time,
-  props.artifact.comparison.frames.performance_time,
-)
+const takePlaybackOffset = resolvePlaybackOffset(props.take.playback_timing)
 const selectionStart = ref(times[0] ?? 0)
 // The whole take, so SELECTED RANGE and FULL ANALYSIS agree until the range is
 // actually narrowed. Defaulting to the first thirty seconds made the two scopes
@@ -415,7 +411,7 @@ onBeforeUnmount(() => {
       <article><span>STABLE-NOTE MAE</span><strong>{{ metric(stableError, "¢") }}</strong><small>{{ summary?.stable_note_region_count ?? 0 }} regions · {{ (summary?.stable_note_total_seconds ?? 0).toFixed(1) }}s</small></article>
     </div>
 
-    <div class="alignment-strip"><span>ALIGNMENT</span><strong>Take {{ metric((artifact.alignment?.global_offset_seconds ?? 0) * 1000, " ms") }} relative to reference</strong><i></i><small>{{ ((artifact.alignment?.global_offset_confidence ?? 0) * 100).toFixed(1) }}% confidence · {{ artifact.alignment?.global_offset_method }}</small></div>
+    <div class="alignment-strip"><span>PLAYBACK TIMING</span><strong>{{ metric(takePlaybackOffset * 1000, " ms") }} relative to reference</strong><i></i><small>{{ take.playback_timing?.message ?? "Original timing preserved." }}</small></div>
 
     <section class="feature-panel charts-panel">
       <div class="charts-heading"><div><p class="mono-eyebrow accent-text">ALIGNED CONTOURS</p><h2>Pitch movement</h2></div><div class="layer-pills"><button :class="{ active: showReference }" @click="showReference = !showReference">REFERENCE</button><button :class="{ active: showPerformance }" @click="showPerformance = !showPerformance">MINE</button><button :class="{ active: showWaveforms }" @click="showWaveforms = !showWaveforms">VOCAL WAVEFORMS</button><button :class="{ active: showPoints }" @click="showPoints = !showPoints">POINTS</button></div></div>

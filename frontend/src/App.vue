@@ -166,10 +166,10 @@ async function handleUpdate(
   if (selectedProject.value) await updateProject(selectedProject.value.id, settings)
 }
 
-async function handleTake(file: File, isolate: boolean): Promise<void> {
+async function handleTake(file: File, isolate: boolean, recordingOffset?: number): Promise<void> {
   if (!selectedProject.value) return
   try {
-    const result = await addTake(selectedProject.value.id, file, isolate, Boolean(selectedProject.value.reference.vocal_path))
+    const result = await addTake(selectedProject.value.id, file, isolate, Boolean(selectedProject.value.reference.vocal_path), recordingOffset)
     selectedTakeId.value = result.take.id
     artifact.value = result.artifact
     activeTab.value = result.artifact ? "compare" : "takes"

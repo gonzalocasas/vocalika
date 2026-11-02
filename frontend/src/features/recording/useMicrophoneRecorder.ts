@@ -119,5 +119,6 @@ export function useMicrophoneRecorder() {
   return {
     state, elapsedSeconds, recordedFile, error, supported, stream,
     start, pause, resume, stop, discard,
+    readElapsed: () => clock.read(performance.now()),
   }
 }

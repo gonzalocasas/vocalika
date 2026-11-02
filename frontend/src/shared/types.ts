@@ -85,7 +85,15 @@ export interface ProjectReference {
 /** Which voice is the melody where the reference has two singers at once. */
 export type ReferenceVoice = "louder" | "upper" | "lower"
 
+export interface PlaybackTiming {
+  offset_seconds: number
+  source: "recording" | "audio-match" | "original"
+  message: string
+}
+
 export interface Take {
+  recording_offset_seconds?: number | null
+  playback_timing?: PlaybackTiming
   id: string
   name: string
   created_at: string

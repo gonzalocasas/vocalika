@@ -11,7 +11,7 @@
         "seconds": 0.25
       },
       {
-        "confidence": 0.4737166259253959,
+        "confidence": 0.0,
         "method": "spectral-change-correlation",
         "peak_margin": 0.1761355719590541,
         "raw_correlation": 0.11699845021299639,
@@ -34,7 +34,8 @@
     "method": "audio-offset-plus-open-ended-temporally-regularized-pitch-dtw",
     "point_count": 167,
     "subsequence_alignment_applied": false,
-    "temporal_consistency_weight": 0.0
+    "temporal_consistency_weight": 0.0,
+    "timing_estimator_version": 2
   },
   "comparison": {
     "frames": {

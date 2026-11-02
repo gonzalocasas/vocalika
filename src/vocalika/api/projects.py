@@ -26,6 +26,7 @@ from vocalika.projects.models import Project, ReferenceVoice, Take
 from vocalika.projects.reference_audio import ReferenceAudioService
 from vocalika.projects.repository import ProjectNotFoundError
 from vocalika.projects.service import ProjectService
+from vocalika.projects.timing import resolve_timing
 
 
 class ProjectSettingsUpdate(BaseModel):
@@ -46,7 +47,10 @@ class ExportRequest(BaseModel):
 
 
 def _project_payload(project: Project) -> dict[str, Any]:
-    return project.to_dict()
+    payload = project.to_dict()
+    for value, take in zip(payload["takes"], project.takes, strict=True):
+        value["playback_timing"] = resolve_timing(take).to_dict()
+    return payload
 
 
 def _take(project: Project, take_id: str) -> Take:
@@ -145,6 +149,7 @@ def create_projects_router(service: ProjectService) -> APIRouter:
         isolate_performance: Annotated[bool, Form()] = False,
         analyze: Annotated[bool, Form()] = True,
         name: Annotated[str | None, Form()] = None,
+        recording_offset_seconds: Annotated[float | None, Form()] = None,
     ) -> dict[str, Any]:
         try:
             service.repository.load(project_id)
@@ -166,12 +171,13 @@ def create_projects_router(service: ProjectService) -> APIRouter:
                 isolate_performance=isolate_performance,
                 analyze=analyze,
                 take_id=take_id,
+                recording_offset_seconds=recording_offset_seconds,
             )
         except Exception as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         return {
             "project": _project_payload(project),
-            "take": take.__dict__,
+            "take": {**take.__dict__, "playback_timing": resolve_timing(take).to_dict()},
             "artifact": artifact,
         }
 
@@ -189,7 +195,7 @@ def create_projects_router(service: ProjectService) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(error)) from error
         return {
             "project": _project_payload(project),
-            "take": take.__dict__,
+            "take": {**take.__dict__, "playback_timing": resolve_timing(take).to_dict()},
             "artifact": artifact,
         }
 

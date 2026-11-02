@@ -396,6 +396,7 @@ def run_analysis(
         },
         "alignment": {
             "method": "audio-offset-plus-open-ended-temporally-regularized-pitch-dtw",
+            "timing_estimator_version": 2,
             "frames_per_second": alignment.frames_per_second,
             "point_count": int(comparison.reference_times.size),
             "temporal_consistency_weight": (alignment.effective_temporal_consistency_weight),

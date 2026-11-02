@@ -76,13 +76,23 @@ async def test_projects_and_unanalyzed_takes_persist_across_app_instances(tmp_pa
 
         added = await client.post(
             f"/api/projects/{project_id}/takes",
-            data={"analyze": "false", "name": "Morning take"},
+            data={"analyze": "false", "name": "Morning take", "recording_offset_seconds": "-0.17"},
             files={"audio_file": ("take.wav", take_bytes, "audio/wav")},
         )
         assert added.status_code == 200
         assert added.json()["take"]["status"] == "ready"
+        assert added.json()["take"]["playback_timing"]["offset_seconds"] == -0.17
+        assert added.json()["project"]["takes"][0]["recording_offset_seconds"] == -0.17
         assert added.json()["take"]["reference_transpose_semitones"] == -3
         assert Path(added.json()["take"]["source_path"]).is_file()
+
+        for invalid in ["nan", "inf", "-9999", "9999"]:
+            rejected = await client.post(
+                f"/api/projects/{project_id}/takes",
+                data={"analyze": "false", "recording_offset_seconds": invalid},
+                files={"audio_file": ("take.wav", take_bytes, "audio/wav")},
+            )
+            assert rejected.status_code == 422
 
         browser_take = await client.post(
             f"/api/projects/{project_id}/takes",

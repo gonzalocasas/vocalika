@@ -88,7 +88,7 @@ def _pitch_track(delay_seconds: float) -> PitchTrack:
 
 def test_vocal_envelope_locates_a_partial_take_inside_a_full_reference(tmp_path: Path) -> None:
     sample_rate = 4_000
-    times = np.arange(12 * sample_rate, dtype=np.float64) / sample_rate
+    times = np.arange(18 * sample_rate, dtype=np.float64) / sample_rate
     envelope = np.zeros_like(times)
     for start, duration, amplitude in (
         (1.0, 0.8, 0.3),
@@ -237,3 +237,33 @@ def test_known_audio_offset_is_removed_before_pitch_comparison(
     assert comparison.mean_absolute_error_cents < 5.0
     assert comparison.within_25_percent > 95.0
     assert comparison.within_50_percent > 95.0
+
+
+@pytest.mark.parametrize("duration_difference", [0.0, 0.1, 0.3])
+@pytest.mark.parametrize(
+    "estimator", [estimate_vocal_envelope_offset, estimate_spectral_change_offset],
+)
+def test_nearly_equal_lengths_do_not_fabricate_high_confidence(
+    tmp_path: Path, duration_difference: float, estimator,
+) -> None:
+    reference, performance = _write_delayed_audio_pair(tmp_path, duration_difference)
+    estimate = estimator(reference, performance)
+    assert estimate.confidence == 0.0
+
+
+def test_containment_boundary_peak_is_not_a_verified_offset(tmp_path, monkeypatch) -> None:
+    # Exact feature identity with ample trailing space: the best match is
+    # provably at the search boundary, not a peak bracketed on both sides.
+    rng = np.random.default_rng(83)
+    short = rng.normal(size=100)
+    long = np.concatenate([short, np.zeros(150)])
+    reference = tmp_path / "reference.wav"
+    performance = tmp_path / "performance.wav"
+    monkeypatch.setattr("vocalika.analysis.offset._rms_envelope",
+                        lambda path, *args: long if path == reference else short)
+    assert estimate_vocal_envelope_offset(reference, performance).confidence == 0
+    short_features = rng.normal(size=(100, 5))
+    long_features = np.concatenate([short_features, np.zeros((150, 5))])
+    monkeypatch.setattr("vocalika.analysis.offset._spectral_change_features",
+                        lambda path, *args: long_features if path == reference else short_features)
+    assert estimate_spectral_change_offset(reference, performance).confidence == 0

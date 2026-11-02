@@ -7,7 +7,7 @@ import TakeWaveform from "./TakeWaveform.vue"
 
 const props = defineProps<{ project: Project; busy: boolean; selectedTakeId: string | null }>()
 const emit = defineEmits<{
-  submit: [file: File, isolate: boolean]
+  submit: [file: File, isolate: boolean, recordingOffset?: number]
   select: [take: Take]
   delete: [take: Take]
   reanalyze: [take: Take]
@@ -118,7 +118,7 @@ function requestDelete(take: Take): void {
       v-if="studioOpen"
       :project="project"
       :busy="busy"
-      @submit="(recording, shouldIsolate) => emit('submit', recording, shouldIsolate)"
+      @submit="(recording, shouldIsolate, offset) => emit('submit', recording, shouldIsolate, offset)"
       @update-lyrics="(lyrics) => emit('updateLyrics', lyrics)"
       @close="studioOpen = false"
     />

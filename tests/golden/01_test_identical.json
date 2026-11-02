@@ -18,7 +18,7 @@
         "seconds": -0.0
       },
       {
-        "confidence": 1.0,
+        "confidence": 0.0,
         "method": "smoothed-vocal-envelope-correlation",
         "peak_margin": 1.0,
         "raw_correlation": 1.0,
@@ -34,7 +34,8 @@
     "method": "audio-offset-plus-open-ended-temporally-regularized-pitch-dtw",
     "point_count": 151,
     "subsequence_alignment_applied": false,
-    "temporal_consistency_weight": 0.0
+    "temporal_consistency_weight": 0.0,
+    "timing_estimator_version": 2
   },
   "comparison": {
     "frames": {

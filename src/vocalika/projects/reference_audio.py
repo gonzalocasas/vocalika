@@ -66,14 +66,15 @@ def _keeps_duration(rendered: Path, source: Path) -> bool:
 
     Transposition preserves duration, so a cached file that differs was
     rendered by a broken pipeline -- the stems made before the sample-rate fix
-    above play 8.8% short and sharp -- and has to be rendered again. A file
-    whose length cannot be read is kept rather than re-rendered on every call.
+    above play 8.8% short and sharp -- and has to be rendered again.
+    Unreadable durations are not accepted as evidence of a valid render.
     """
     rendered_seconds = _duration_seconds(rendered)
     source_seconds = _duration_seconds(source)
     if rendered_seconds is None or not source_seconds:
-        return True
-    return abs(rendered_seconds - source_seconds) <= 0.01 * source_seconds
+        return False
+    return (math.isfinite(rendered_seconds) and math.isfinite(source_seconds)
+            and abs(rendered_seconds - source_seconds) <= 0.05)
 
 
 class ReferenceAudioService:
@@ -140,6 +141,10 @@ class ReferenceAudioService:
             )
             if not temporary.is_file() or temporary.stat().st_size == 0:
                 raise RuntimeError("Transposed audio renderer produced no output")
+            if not _keeps_duration(temporary, source):
+                raise RuntimeError(
+                    "Transposed audio changed duration; refusing an out-of-sync render"
+                )
             temporary.replace(destination)
         except (FileNotFoundError, subprocess.CalledProcessError) as error:
             detail = getattr(error, "stderr", "") or str(error)

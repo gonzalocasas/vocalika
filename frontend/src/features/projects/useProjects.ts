@@ -65,6 +65,7 @@ export function useProjects() {
     file: File,
     isolatePerformance: boolean,
     analyze = true,
+    recordingOffset?: number,
   ): Promise<{ project: Project; take: Take; artifact: AnalysisArtifact | null }> {
     busy.value = true
     error.value = ""
@@ -74,6 +75,7 @@ export function useProjects() {
       body.append("name", file.name.replace(/\.[^.]+$/, ""))
       body.append("isolate_performance", String(isolatePerformance))
       body.append("analyze", String(analyze))
+      if (recordingOffset !== undefined) body.append("recording_offset_seconds", String(recordingOffset))
       const payload = await apiJson<{
         project: Project
         take: Take

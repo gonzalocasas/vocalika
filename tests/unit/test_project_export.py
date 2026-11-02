@@ -10,14 +10,16 @@ import soundfile as sf
 from httpx import ASGITransport, AsyncClient
 
 from vocalika.api.app import create_app
+from vocalika.api.projects import _project_payload
 from vocalika.projects.export import ProjectExportService, _route_channels
 from vocalika.projects.models import Project, ProjectReference, Take
 from vocalika.projects.repository import ProjectRepository
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("captured", [None, -0.25])
 async def test_project_export_places_analyzed_take_on_reference_timeline(
-    tmp_path: Path,
+    tmp_path: Path, captured: float | None,
 ) -> None:
     sample_rate = 16_000
     project_id = "a" * 32
@@ -60,6 +62,11 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
                     "source": {"path": str(take_path)},
                     "analysis_source": {"path": str(take_path)},
                 },
+                "alignment": {
+                    "global_offset_seconds": -0.25,
+                    "global_offset_confidence": 1.0,
+                    "global_offset_method": "pcm-cross-correlation",
+                },
                 "comparison": {
                     "frames": {
                         "reference_time": [0.25, 0.5, 0.75, 1.0, 1.25],
@@ -79,6 +86,7 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
         isolate_performance=False,
         status="analyzed",
         analysis_path=str(artifact_path),
+        recording_offset_seconds=captured,
     )
     repository.save(
         Project(
@@ -104,6 +112,9 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
         )
     )
 
+    playback = _project_payload(repository.load(project_id))["takes"][0]["playback_timing"]
+    assert playback["offset_seconds"] == -0.25
+
     result = ProjectExportService(repository).render(
         project_id,
         take_id,
@@ -121,6 +132,13 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
     assert 420 <= zero_crossings <= 450
     assert result.filename == "practice-song_first-take_mix.wav"
     assert result.media_type == "audio/wav"
+
+    preview = ProjectExportService(repository).render(
+        project_id, take_id, instrumental_db=-24, preview=True,
+    )
+    preview_samples, preview_rate = sf.read(preview.path, always_2d=True)
+    assert preview_rate == exported_rate
+    np.testing.assert_array_equal(preview_samples, exported)
 
     app = create_app(
         None,
