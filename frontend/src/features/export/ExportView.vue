@@ -91,12 +91,12 @@ onBeforeUnmount(clearPreview)
 
 <template>
   <section class="export-layout">
-    <p v-if="selectedTake" class="feature-note">{{ selectedTake.playback_timing?.message ?? "Original timing preserved." }}</p>
     <div class="feature-panel mixdown-panel">
       <div class="feature-heading">
         <div><p class="mono-eyebrow accent-text">MIXDOWN</p><h2>Your vocal over the instrumental</h2></div>
         <span class="export-duration">{{ trimDuration.toFixed(1) }} SEC</span>
       </div>
+      <p v-if="selectedTake" class="feature-note">{{ selectedTake.playback_timing?.message ?? "Original timing preserved." }}</p>
 
       <label class="export-select">
         <span>TAKE</span>
