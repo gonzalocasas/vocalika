@@ -42,8 +42,19 @@ function checkRecordingTiming(): void {
   const reference = instrumentalAudio.value ?? vocalAudio.value
   if (capturedOffset.value === null || !reference || recorder.state.value !== "recording") return
   const other = instrumentalAudio.value && vocalAudio.value ? vocalAudio.value.currentTime : undefined
-  if (!timingIsConsistent(capturedOffset.value, recorder.readElapsed(), reference.currentTime, other)) {
-    timingError.value = "Recording stopped because the backing track lost sync. Please record a new take."
+  const elapsed = recorder.readElapsed()
+  if (!timingIsConsistent(capturedOffset.value, elapsed, reference.currentTime, other)) {
+    // The clock readings go in the message: a sync failure seen only on one
+    // browser engine is otherwise impossible to tell apart from a real one.
+    const seconds = (value: number) => `${value.toFixed(2)} s`
+    const readings = [
+      `take ${seconds(elapsed)}`,
+      `backing ${seconds(reference.currentTime)}`,
+      ...(other === undefined ? [] : [`vocal ${seconds(other)}`]),
+      `anchored offset ${seconds(capturedOffset.value)}`,
+    ].join(", ")
+    timingError.value =
+      `Recording stopped because the backing track lost sync. Please record a new take. (${readings})`
     stopRecording()
   }
 }
@@ -169,11 +180,25 @@ function referenceEnd(): number {
   return props.project.trim_end_seconds ?? props.project.reference.duration_seconds
 }
 
-function playMonitor(): Promise<unknown> {
-  return Promise.all([
-    vocalAudio.value?.play(),
-    instrumentalAudio.value?.play(),
-  ].filter((promise): promise is Promise<void> => promise !== undefined))
+/**
+ * Start the reference and resolve once every stem's clock is actually moving.
+ *
+ * WebKit (Safari, and the macOS desktop app) resolves play() before audio
+ * flows: currentTime then holds still for 0.1-0.3 s, each element after its
+ * own delay. Anything timed against the reference straight after play() (the
+ * take's anchored offset, the resumed recorder) would build that stall in, and
+ * the sync check would stop the take moments later.
+ */
+async function playMonitor(timeoutMs = 3000): Promise<void> {
+  const elements = [vocalAudio.value, instrumentalAudio.value]
+    .filter((element): element is HTMLAudioElement => element !== null)
+  const starts = elements.map((element) => element.currentTime)
+  await Promise.all(elements.map((element) => element.play()))
+  const deadline = performance.now() + timeoutMs
+  while (!elements.every((element, index) => element.currentTime > starts[index])) {
+    if (performance.now() > deadline) throw new Error("The backing track did not start playing.")
+    await new Promise((resolve) => window.setTimeout(resolve, 5))
+  }
 }
 
 /**
