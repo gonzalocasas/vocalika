@@ -41,6 +41,13 @@ let timingTimer: number | undefined
 function checkRecordingTiming(): void {
   const reference = instrumentalAudio.value ?? vocalAudio.value
   if (capturedOffset.value === null || !reference || recorder.state.value !== "recording") return
+  // A stem that has played to the end of its file is the song finishing, not
+  // drift: its clock stops while the take's keeps running until the stop
+  // timer (scheduled from the metadata duration) fires.
+  if (referenceFinished()) {
+    stopRecording()
+    return
+  }
   const other = instrumentalAudio.value && vocalAudio.value ? vocalAudio.value.currentTime : undefined
   const elapsed = recorder.readElapsed()
   if (!timingIsConsistent(capturedOffset.value, elapsed, reference.currentTime, other)) {
@@ -57,6 +64,14 @@ function checkRecordingTiming(): void {
       `Recording stopped because the backing track lost sync. Please record a new take. (${readings})`
     stopRecording()
   }
+}
+
+function referenceFinished(): boolean {
+  return [vocalAudio.value, instrumentalAudio.value].some((element) => element?.ended === true)
+}
+
+function onReferenceEnded(): void {
+  if (recorder.state.value === "recording") stopRecording()
 }
 
 function clearTimingCheck(): void {
@@ -463,11 +478,12 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
         </aside>
       </div>
 
-      <audio v-if="project.reference.vocal_path" ref="vocalAudio" preload="auto" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${project.transpose_semitones}`"></audio>
+      <audio v-if="project.reference.vocal_path" ref="vocalAudio" preload="auto" @ended="onReferenceEnded" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${project.transpose_semitones}`"></audio>
       <audio
         v-if="project.reference.instrumental_path"
         ref="instrumentalAudio"
         preload="auto"
+        @ended="onReferenceEnded"
         :src="`/api/projects/${project.id}/audio/instrumental?v=${project.updated_at}&transpose=${project.transpose_semitones}`"
       ></audio>
     </section>
