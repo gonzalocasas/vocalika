@@ -14,6 +14,7 @@ from typing import Any
 
 from vocalika.models.artifact import load_artifact
 from vocalika.projects.models import Take
+from vocalika.projects.sidecar import cached
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,31 @@ class PlaybackTiming:
         return asdict(self)
 
 
+_OFFSET_FIELDS = (
+    "global_offset_method",
+    "global_offset_seconds",
+    "global_offset_confidence",
+    "global_offset_candidates",
+    "timing_estimator_version",
+)
+
+
+def _offset_evidence(analysis_path: Path) -> dict[str, Any]:
+    """The alignment fields timing needs, without parsing the whole analysis each time.
+
+    Every take in the project list resolves its timing, and an analysis is
+    megabytes of frames; reading them all made the list slow.
+    """
+
+    def read() -> dict[str, Any]:
+        alignment = load_artifact(analysis_path).get("alignment", {})
+        return {key: alignment[key] for key in _OFFSET_FIELDS if key in alignment}
+
+    return cached(
+        analysis_path.with_name(f"{analysis_path.stem}.timing.cache"), analysis_path, read
+    )
+
+
 def resolve_timing(take: Take) -> PlaybackTiming:
     captured = take.recording_offset_seconds
     if captured is not None and math.isfinite(captured):
@@ -33,7 +59,7 @@ def resolve_timing(take: Take) -> PlaybackTiming:
     alignment: dict[str, Any] = {}
     if take.analysis_path:
         with suppress(OSError, ValueError):
-            alignment = load_artifact(Path(take.analysis_path)).get("alignment", {})
+            alignment = _offset_evidence(Path(take.analysis_path))
     # Only direct waveform identity or a guarded spectral phrase match can
     # establish imported audio placement. Old spectral searches were unguarded.
     candidates = [{

@@ -15,7 +15,6 @@ from vocalika.api.uploads import safe_upload_name, save_upload
 from vocalika.api.waveform import build_aligned_waveforms, build_waveform_envelope
 from vocalika.audio.sources import LocalAudioSource
 from vocalika.lyrics.lrclib import LyricsLookupError, search_lyrics
-from vocalika.models.artifact import load_artifact
 from vocalika.projects.export import (
     ChannelLayout,
     ExportFormat,
@@ -24,8 +23,9 @@ from vocalika.projects.export import (
 )
 from vocalika.projects.models import Project, ReferenceVoice, Take
 from vocalika.projects.reference_audio import ReferenceAudioService
-from vocalika.projects.repository import ProjectNotFoundError
+from vocalika.projects.repository import ProjectNotFoundError, load_take_artifact
 from vocalika.projects.service import ProjectService
+from vocalika.projects.sidecar import cached
 from vocalika.projects.timing import resolve_timing
 
 
@@ -66,7 +66,7 @@ def _artifact_for_take(service: ProjectService, project_id: str, take_id: str) -
     if take.analysis_path is None:
         raise HTTPException(status_code=404, detail="This take has not been analyzed yet.")
     try:
-        return load_artifact(Path(take.analysis_path))
+        return load_take_artifact(take)
     except (OSError, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -258,10 +258,12 @@ def create_projects_router(service: ProjectService) -> APIRouter:
         value = candidates[kind]
         if value is None or not Path(value).is_file():
             raise HTTPException(status_code=404, detail=f"Reference {kind} is unavailable.")
+        source = Path(value)
         return await run_in_threadpool(
-            build_waveform_envelope,
-            Path(value),
-            reference.duration_seconds,
+            cached,
+            service.repository.project_directory(project_id) / "waveforms" / f"{kind}.cache",
+            source,
+            lambda: build_waveform_envelope(source, reference.duration_seconds),
         )
 
     @router.get("/{project_id}/reference/pitch")
@@ -374,7 +376,7 @@ def create_projects_router(service: ProjectService) -> APIRouter:
         take = _take(project, take_id)
         candidate = Path(take.source_path)
         if kind == "vocal" and take.analysis_path is not None:
-            artifact = load_artifact(Path(take.analysis_path))
+            artifact = load_take_artifact(take)
             performance = artifact.get("performance", {})
             analysis_source = performance.get("analysis_source") or {}
             playback_candidates = (
@@ -396,21 +398,36 @@ def create_projects_router(service: ProjectService) -> APIRouter:
             take = _take(service.repository.load(project_id), take_id)
         except ProjectNotFoundError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
-        waveform_path = Path(take.source_path)
-        if take.analysis_path is not None:
-            artifact = load_artifact(Path(take.analysis_path))
-            waveform_path = Path(
-                artifact.get("performance", {}).get("analysis_audio") or take.source_path
+        source = Path(take.source_path)
+        if not source.is_file():
+            raise HTTPException(status_code=404, detail="Take audio is unavailable.")
+
+        def envelope() -> dict[str, list[float]]:
+            waveform_path = source
+            if take.analysis_path is not None:
+                analysis_audio = load_take_artifact(take).get("performance", {}).get(
+                    "analysis_audio"
+                )
+                if analysis_audio and Path(analysis_audio).is_file():
+                    waveform_path = Path(analysis_audio)
+            asset = LocalAudioSource(source).acquire()
+            if asset.duration_seconds is None:
+                raise ValueError("Take duration is unavailable.")
+            return build_waveform_envelope(
+                waveform_path, asset.duration_seconds, maximum_points=100
             )
-        asset = await run_in_threadpool(LocalAudioSource(Path(take.source_path)).acquire)
-        if asset.duration_seconds is None:
-            raise HTTPException(status_code=422, detail="Take duration is unavailable.")
-        return await run_in_threadpool(
-            build_waveform_envelope,
-            waveform_path,
-            asset.duration_seconds,
-            maximum_points=100,
-        )
+
+        try:
+            # Keyed by the analysis when there is one: re-analysing changes
+            # the audio the outline is drawn from.
+            return await run_in_threadpool(
+                cached,
+                source.parent / "waveform.cache",
+                Path(take.analysis_path) if take.analysis_path else source,
+                envelope,
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     async def create_export(
         project_id: str,

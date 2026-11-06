@@ -13,6 +13,7 @@ from vocalika.cache.manager import CacheManager
 from vocalika.config import AnalysisConfig
 from vocalika.pipeline import run_analysis
 from vocalika.plotting import plot_artifact
+from vocalika.storage import StorageSettings, default_settings_path, projects_directory
 
 app = typer.Typer(no_args_is_help=True, help="Analyze and compare vocal performances.")
 
@@ -115,7 +116,13 @@ def serve(
     port: Annotated[int, typer.Option(min=1, max=65535)] = 8000,
     analyses_directory: Annotated[
         Path,
-        typer.Option(file_okay=False, help="Root folder browsed for saved analyses."),
+        typer.Option(
+            file_okay=False,
+            help=(
+                "Root folder browsed for saved analyses. Projects live in the data folder "
+                "chosen in the app; this folder is only offered until one is chosen."
+            ),
+        ),
     ] = Path("analysis-output"),
     cache_directory: Annotated[
         Path | None,
@@ -134,8 +141,8 @@ def serve(
             analyses_directory=analyses_directory / "web",
             library_directory=analyses_directory,
             analysis_runner=web_analysis_runner,
-            projects_directory=analyses_directory / "projects",
             cache_directory=cache_directory,
+            storage=StorageSettings(default_settings_path(), analyses_directory),
         ),
         host=host,
         port=port,
@@ -153,9 +160,12 @@ def reanalyze(
         ),
     ] = None,
     analyses_directory: Annotated[
-        Path,
-        typer.Option(file_okay=False, help="Root folder holding the projects."),
-    ] = Path("analysis-output"),
+        Path | None,
+        typer.Option(
+            file_okay=False,
+            help="Data folder holding the projects. Default: the one chosen in the app.",
+        ),
+    ] = None,
     cache_directory: Annotated[
         Path | None,
         typer.Option(file_okay=False, help="Cache shared with the web UI."),
@@ -170,7 +180,12 @@ def reanalyze(
     from vocalika.projects.repository import ProjectRepository
     from vocalika.projects.service import ProjectService
 
-    repository = ProjectRepository((analyses_directory / "projects").expanduser().resolve())
+    data_directory = (
+        analyses_directory
+        if analyses_directory is not None
+        else StorageSettings(default_settings_path(), Path("analysis-output")).data_directory
+    )
+    repository = ProjectRepository(projects_directory(data_directory.expanduser().resolve()))
     cache = (
         CacheManager(cache_directory.expanduser().resolve())
         if cache_directory

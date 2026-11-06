@@ -50,10 +50,22 @@ analysis is calculated.
   delegates work, and serves project-owned media/artifacts.
 - `vocalika.api.uploads`: shared upload filename and size policy.
 
-Project records are stored below `analysis-output/projects/<project-id>/`.
-Reference and take media are copied into that directory so a cache clear does
-not destroy the workspace. Expensive downloaded/separated intermediates may
-still be reused from Vocalika's cache.
+Project records are stored below `<data folder>/projects/<project-id>/`. The
+data folder is chosen on first start and can be moved in Settings
+(`vocalika.storage`); the choice is kept in the per-user config folder
+(`VOCALIKA_SETTINGS` overrides its location). Until one is chosen, the
+`--analyses-directory` given to `serve` is offered. Reference and take media
+are copied into the project directory so a cache clear does not destroy the
+workspace. Expensive downloaded/separated intermediates may still be reused
+from Vocalika's cache.
+
+`project.json` stores paths relative to its project directory, so a data
+folder can be moved or copied whole. Projects written before that hold
+absolute paths, as do take analyses; `projects.repository.locate` re-roots
+those by the project id among their parts, preferring the file inside the
+current project. Values derived from large files for the project list (each
+waveform outline, a take's alignment offset) are cached next to them
+(`projects.sidecar`), keyed by the source's size and modification time.
 
 ## Frontend boundaries
 

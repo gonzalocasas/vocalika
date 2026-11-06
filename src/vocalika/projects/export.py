@@ -12,10 +12,9 @@ import soundfile as sf
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
 
-from vocalika.models.artifact import load_artifact
 from vocalika.projects.models import Project, Take
 from vocalika.projects.reference_audio import ReferenceAudioService
-from vocalika.projects.repository import ProjectRepository
+from vocalika.projects.repository import ProjectRepository, load_take_artifact
 from vocalika.projects.timing import resolve_timing
 
 FloatAudio = NDArray[np.float32]
@@ -75,7 +74,7 @@ def _read_audio(path: Path, target_sample_rate: int) -> FloatAudio:
 def _take_vocal_path(take: Take) -> Path:
     if take.analysis_path is None:
         return Path(take.source_path)
-    artifact = load_artifact(Path(take.analysis_path))
+    artifact = load_take_artifact(take)
     performance = artifact["performance"]
     source = performance.get("analysis_source") or performance.get("source")
     return Path(source["path"])

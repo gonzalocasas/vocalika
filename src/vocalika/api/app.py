@@ -17,6 +17,7 @@ from starlette.responses import Response
 from starlette.types import Scope
 
 from vocalika.api.projects import create_projects_router
+from vocalika.api.settings import create_settings_router
 from vocalika.api.uploads import safe_upload_name, save_upload
 from vocalika.api.waveform import build_aligned_waveforms
 from vocalika.cache.manager import CacheManager
@@ -24,6 +25,8 @@ from vocalika.models.artifact import load_artifact
 from vocalika.pipeline import run_analysis
 from vocalika.projects.repository import ProjectRepository
 from vocalika.projects.service import ProjectService
+from vocalika.storage import PROJECTS_FOLDER, StorageManager, StorageSettings
+from vocalika.storage import projects_directory as storage_projects_directory
 
 AnalysisRunner = Callable[..., Path]
 
@@ -54,7 +57,13 @@ def create_app(
     projects_directory: Path | None = None,
     cache_directory: Path | None = None,
     project_analysis_runner: AnalysisRunner = run_analysis,
+    storage: StorageSettings | None = None,
 ) -> FastAPI:
+    """The web app.
+
+    ``storage`` decides where projects live and lets the singer move them; when
+    omitted, projects stay fixed in ``projects_directory``.
+    """
     repository_root = Path(__file__).resolve().parents[3]
     artifact_path = artifact_path.expanduser().resolve() if artifact_path is not None else None
     artifact = load_artifact(artifact_path) if artifact_path is not None else None
@@ -63,9 +72,13 @@ def create_app(
         analyses_directory or repository_root / "analysis-output" / "web"
     ).resolve()
     library_directory = (library_directory or repository_root / "analysis-output").resolve()
-    projects_directory = (
-        projects_directory or library_directory / "projects"
-    ).expanduser().resolve()
+    if storage is None:
+        projects_directory = (
+            projects_directory or library_directory / PROJECTS_FOLDER
+        ).expanduser().resolve()
+        storage = StorageSettings(None, projects_directory.parent)
+    else:
+        projects_directory = storage_projects_directory(storage.data_directory)
     analysis_lock = asyncio.Lock()
     waveform_lock = asyncio.Lock()
     waveform_cache: tuple[str, dict[str, list[float]]] | None = None
@@ -75,12 +88,18 @@ def create_app(
         if cache_directory is not None
         else CacheManager.default()
     )
+    project_service = ProjectService(
+        ProjectRepository(projects_directory),
+        cache=project_cache,
+        analysis_runner=project_analysis_runner,
+    )
+    app.include_router(create_projects_router(project_service))
     app.include_router(
-        create_projects_router(
-            ProjectService(
-                ProjectRepository(projects_directory),
-                cache=project_cache,
-                analysis_runner=project_analysis_runner,
+        create_settings_router(
+            StorageManager(
+                storage,
+                project_service.repository,
+                is_busy=lambda: project_service.busy,
             )
         )
     )

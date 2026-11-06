@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import math
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from threading import Lock
+from typing import Any, Concatenate, Literal
 from uuid import uuid4
 
 from vocalika.audio.separation import DemucsVocalSeparator
@@ -33,6 +35,16 @@ def _copy_media(source: Path, destination: Path) -> Path:
     return destination.resolve()
 
 
+def _tracked[**P, R](
+    method: Callable[Concatenate[ProjectService, P], R],
+) -> Callable[Concatenate[ProjectService, P], R]:
+    def run(self: ProjectService, /, *args: P.args, **kwargs: P.kwargs) -> R:
+        with self._job():
+            return method(self, *args, **kwargs)
+
+    return run
+
+
 class ProjectService:
     def __init__(
         self,
@@ -45,10 +57,33 @@ class ProjectService:
         self.cache = cache or CacheManager.default()
         self.analysis_runner = analysis_runner
         self.reference_audio = ReferenceAudioService(repository)
+        self._jobs = 0
+        self._jobs_lock = Lock()
+
+    @property
+    def busy(self) -> bool:
+        """Whether a project is being created or a take analysed right now.
+
+        Both write into a project folder for a long time without holding the
+        repository lock, so moving the data folder has to wait for them.
+        """
+        with self._jobs_lock:
+            return self._jobs > 0
+
+    @contextmanager
+    def _job(self) -> Iterator[None]:
+        with self._jobs_lock:
+            self._jobs += 1
+        try:
+            yield
+        finally:
+            with self._jobs_lock:
+                self._jobs -= 1
 
     def new_id(self) -> str:
         return uuid4().hex
 
+    @_tracked
     def create_project(
         self,
         project_id: str,
@@ -191,6 +226,7 @@ class ProjectService:
             return project, take, None
         return self.analyze_take(project_id, take_id)
 
+    @_tracked
     def analyze_take(
         self,
         project_id: str,

@@ -67,8 +67,9 @@ uv run vocalika serve
 Then open <http://127.0.0.1:8000>.
 
 `setup-models` downloads the source-separation and lyric-alignment models
-once, up front, so the first project does not stall on them. Projects live in
-`analysis-output/projects/`; your original audio files are never modified.
+once, up front, so the first project does not stall on them. On first start
+Vocalika asks which folder to keep your songs and takes in; the gear icon at the
+top right moves it later. Your original audio files are never modified.
 
 To reach Vocalika from another computer on a trusted network, bind it to all
 interfaces:

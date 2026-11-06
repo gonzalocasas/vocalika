@@ -232,6 +232,30 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .recording-controls .text-button { width:100%; margin-top:10px; }
 .inline-error { color:#d99a7b; font-size:11px; }
 
+/* --- settings ------------------------------------------------------------ */
+.settings-button { display:grid; place-items:center; width:34px; height:34px; margin-left:8px; border:1px solid #33383a; border-radius:9px; background:#1b1e20; color:#a8a49a; }
+.settings-button:hover { border-color:var(--cream); color:var(--cream); }
+.settings-button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.settings-overlay { position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(8,10,11,.78); backdrop-filter:blur(3px); }
+.settings-modal { display:flex; flex-direction:column; width:min(620px,100%); max-height:100%; overflow:auto; border:1px solid #3a4042; border-radius:18px; background:var(--surface); box-shadow:0 30px 80px rgba(0,0,0,.55); }
+.settings-header { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:20px 24px; border-bottom:1px solid #26292b; }
+.settings-header h3 { margin:4px 0 0; font-size:22px; }
+.settings-kicker,.storage-current>span,.storage-field>span { color:#7c817f; font:500 10px "IBM Plex Mono",monospace; letter-spacing:.15em; }
+.settings-body { display:flex; flex-direction:column; gap:16px; padding:22px 24px; }
+.settings-lede { margin:0; color:#a8a49a; line-height:1.55; }
+.storage-current { display:flex; flex-direction:column; gap:6px; padding:14px 16px; border:1px solid #26292b; border-radius:11px; background:var(--ink); }
+.storage-current code { color:var(--cream); font:500 13px "IBM Plex Mono",monospace; overflow-wrap:anywhere; }
+.storage-current small { color:#7c817f; }
+.storage-field { display:flex; flex-direction:column; gap:8px; }
+.storage-input-row { display:flex; gap:8px; }
+.storage-input-row .graphite-input { flex:1; min-width:0; font-family:"IBM Plex Mono",monospace; font-size:13px; }
+.storage-note { margin:0; color:#a8a49a; font-size:12px; }
+.storage-choice { display:flex; flex-direction:column; gap:12px; padding:14px 16px; border:1px solid #26292b; border-radius:11px; }
+.storage-choice b { color:var(--cream); font-weight:600; }
+.settings-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:14px; padding:16px 24px 20px; border-top:1px solid #26292b; }
+.settings-footer .storage-note { flex:1 1 220px; }
+@media(max-width:620px){.storage-input-row{flex-direction:column}.settings-footer .accent-button{width:100%}}
+
 /* --- recording studio modal --------------------------------------------- */
 body.modal-open { overflow:hidden; }
 .record-launcher { border-style:solid; border-color:#33383a; background:var(--surface-raised); }

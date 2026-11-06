@@ -14,7 +14,8 @@ import ReferenceView from "./features/reference/ReferenceView.vue"
 import { appRoutePath, parseAppRoute } from "./routes"
 import type { AppRoute, ProjectTab } from "./routes"
 import TakesView from "./features/takes/TakesView.vue"
-import type { AnalysisArtifact, Project, Take } from "./shared/types"
+import type { AnalysisArtifact, Project, StorageStatus, Take } from "./shared/types"
+import SettingsDialog from "./features/settings/SettingsDialog.vue"
 
 const {
   projects,
@@ -28,7 +29,27 @@ const {
   deleteTake,
   reanalyzeTake,
   loadAnalysis,
+  refresh,
 } = useProjects()
+
+// The first start has no data folder yet: ask for one before anything else.
+const settingsMode = ref<"setup" | "settings" | null>(null)
+async function checkStorage(): Promise<void> {
+  try {
+    const status = await apiJson<StorageStatus>("/api/settings/storage")
+    if (!status.configured) settingsMode.value = "setup"
+  } catch {
+    // An unreachable server already shows its own error on the project list.
+  }
+}
+
+async function handleStorageChanged(): Promise<void> {
+  settingsMode.value = null
+  // Projects open from the previous folder may not exist in the new one.
+  applyRoute({ projectId: null, tab: activeTab.value, takeId: null })
+  writeRoute()
+  await refresh()
+}
 const initialRoute = parseAppRoute(window.location.pathname)
 const selectedProjectId = ref<string | null>(initialRoute.projectId)
 const activeTab = ref<ProjectTab>(initialRoute.tab)
@@ -289,7 +310,10 @@ watch(() => selectedProjectId.value, () => void loadReferenceRange(), { immediat
 watch([loaded, selectedProject, activeTab, selectedTakeId], () => void reconcileRoute(), {
   immediate: true,
 })
-onMounted(() => window.addEventListener("popstate", handlePopState))
+onMounted(() => {
+  window.addEventListener("popstate", handlePopState)
+  void checkStorage()
+})
 onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
 </script>
 
@@ -300,10 +324,29 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
         <a class="brand" href="/" aria-label="Vocalika home">
           <img class="header-logo" src="/brand/header-logo.png" alt="Vocalika" />
         </a>
-        <span>v0.4 / server workspace</span>
       </div>
-      <div><i></i><span>ENGINE READY</span></div>
+      <div>
+        <i></i><span>ENGINE READY</span>
+        <button
+          type="button"
+          class="settings-button"
+          title="Settings"
+          aria-label="Settings"
+          @click="settingsMode = 'settings'"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path fill="currentColor" d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.3 7.3 0 0 0-1.69-.98l-.38-2.65A.49.49 0 0 0 14 2h-4a.49.49 0 0 0-.49.42l-.38 2.65c-.61.25-1.17.58-1.69.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.49.49 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.58 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/>
+          </svg>
+        </button>
+      </div>
     </header>
+
+    <SettingsDialog
+      v-if="settingsMode"
+      :mode="settingsMode"
+      @changed="handleStorageChanged"
+      @close="settingsMode = null"
+    />
 
     <main :class="{ 'projects-page': !selectedProject }">
       <div v-if="error" class="app-error"><span>ERROR</span>{{ error }}</div>

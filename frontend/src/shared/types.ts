@@ -131,3 +131,19 @@ export interface AlignedWaveforms {
   reference_amplitude: number[]
   performance_amplitude: number[]
 }
+
+/** Where projects are stored; see vocalika/storage.py. */
+export interface StorageStatus {
+  configured: boolean
+  data_directory: string
+  project_count: number
+  suggested_directory: string
+  can_browse: boolean
+}
+
+export interface FolderInspection {
+  path: string
+  exists: boolean
+  project_count: number
+  problem: string | null
+}
