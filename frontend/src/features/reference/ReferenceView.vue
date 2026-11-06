@@ -169,11 +169,9 @@ async function findLyrics(): Promise<void> {
   }
 }
 
+// No window.confirm(): the macOS app's webview silently answers it "no".
+// The list says up front that choosing replaces the current lyrics.
 function useCandidate(candidate: LyricsCandidate): void {
-  if (
-    props.project.lyrics.trim()
-    && !window.confirm("Replace this project's lyrics with the ones from LRCLIB?")
-  ) return
   lyrics.value = candidate.lyrics
   candidates.value = null
   editingLyrics.value = false
@@ -400,8 +398,8 @@ onBeforeUnmount(stop)
         <button v-if="playing || paused" class="ghost-button compact" @click="stop">■ STOP</button>
         <span>{{ formatTime(playhead) }} / {{ formatTime(duration) }}</span>
       </div>
-      <audio v-if="project.reference.vocal_path" ref="vocalAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${transpose}`"></audio>
-      <audio
+      <audio v-audio-output v-if="project.reference.vocal_path" ref="vocalAudio" preload="metadata" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${transpose}`"></audio>
+      <audio v-audio-output
         v-if="project.reference.instrumental_path"
         ref="instrumentalAudio"
         preload="metadata"
@@ -435,6 +433,7 @@ onBeforeUnmount(stop)
           <span>FROM LRCLIB</span>
           <button type="button" class="tool-button" @click="candidates = null">CANCEL</button>
         </div>
+        <p v-if="project.lyrics.trim()" class="feature-note">Choosing one replaces this project's current lyrics.</p>
         <button
           v-for="candidate in candidates"
           :key="candidate.id"

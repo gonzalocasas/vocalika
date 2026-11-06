@@ -1,5 +1,6 @@
 import { onBeforeUnmount, ref } from "vue"
 
+import { contextOutput } from "../../shared/audioDevices"
 import { midiToHertz, nearestSampleMidi, playbackRateFor, sampleUrl } from "./pianoSamples"
 
 export { midiToHertz }
@@ -24,11 +25,16 @@ export function useTonePlayer() {
   const playing = ref(false)
   const usingSamples = ref(true)
   let context: AudioContext | null = null
+  /** Where notes connect: the context's speakers, or the chosen output. */
+  let output: AudioNode | null = null
   let stopAt = 0
   let sequence = 0
 
   function ensureContext(): AudioContext {
-    if (!context) context = new AudioContext()
+    if (!context) {
+      context = new AudioContext()
+      output = contextOutput(context)
+    }
     return context
   }
 
@@ -54,6 +60,7 @@ export function useTonePlayer() {
     if (context) {
       void context.close()
       context = null
+      output = null
     }
   }
 
@@ -68,7 +75,7 @@ export function useTonePlayer() {
     gain.gain.setValueAtTime(0.22, at + step.seconds - 0.08)
     gain.gain.linearRampToValueAtTime(0, at + step.seconds)
     oscillator.connect(gain)
-    gain.connect(audio.destination)
+    gain.connect(output ?? audio.destination)
     oscillator.start(at)
     oscillator.stop(at + step.seconds)
   }
@@ -92,7 +99,7 @@ export function useTonePlayer() {
     gain.gain.setValueAtTime(0.85, at + step.seconds - release)
     gain.gain.exponentialRampToValueAtTime(0.0001, at + step.seconds)
     source.connect(gain)
-    gain.connect(audio.destination)
+    gain.connect(output ?? audio.destination)
     source.start(at)
     source.stop(at + step.seconds + 0.02)
   }

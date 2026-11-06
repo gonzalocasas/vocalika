@@ -2,12 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
 import { apiJson } from "../../shared/api"
+import AudioSettings from "./AudioSettings.vue"
 import type { FolderInspection, StorageStatus } from "../../shared/types"
 import { storageAction } from "./storageChoice"
 
 // "setup" is the first start: a folder has to be chosen before anything else,
 // so the dialog cannot be dismissed.
 const props = defineProps<{ mode: "setup" | "settings" }>()
+const tab = ref<"storage" | "audio">("storage")
 const emit = defineEmits<{ changed: [status: StorageStatus]; close: [] }>()
 
 const status = ref<StorageStatus | null>(null)
@@ -133,12 +135,32 @@ onBeforeUnmount(() => {
         <div>
           <span class="settings-kicker">{{ mode === "setup" ? "WELCOME" : "SETTINGS" }}</span>
           <h3 id="settings-title">
-            {{ mode === "setup" ? "Where should Vocalika keep your songs?" : "Storage" }}
+            {{ mode === "setup" ? "Where should Vocalika keep your songs?" : tab === "audio" ? "Audio devices" : "Storage" }}
           </h3>
         </div>
         <button v-if="mode === 'settings'" class="tool-button close" aria-label="Close settings" :disabled="saving" @click="requestClose">✕</button>
       </header>
 
+      <nav v-if="mode === 'settings'" class="settings-tabs" role="tablist" aria-label="Settings sections">
+        <button
+          v-for="option in (['storage', 'audio'] as const)"
+          :key="option"
+          role="tab"
+          :aria-selected="tab === option"
+          :class="{ active: tab === option }"
+          :disabled="saving"
+          @click="tab = option"
+        >{{ option === "storage" ? "STORAGE" : "AUDIO" }}</button>
+      </nav>
+
+      <div v-if="tab === 'audio'" class="settings-body">
+        <AudioSettings />
+      </div>
+      <footer v-if="tab === 'audio'" class="settings-footer">
+        <button class="ghost-button accent-button" @click="requestClose">DONE</button>
+      </footer>
+
+      <template v-else>
       <div class="settings-body">
         <p v-if="mode === 'setup'" class="settings-lede">
           Every song you add and every take you record is saved in one folder on this computer.
@@ -197,6 +219,7 @@ onBeforeUnmount(() => {
           {{ saving ? (action?.move ? "MOVING…" : "SAVING…") : action?.label ?? "USE THIS FOLDER" }}
         </button>
       </footer>
+      </template>
     </section>
   </div>
 </template>

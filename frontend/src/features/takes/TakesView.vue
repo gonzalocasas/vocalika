@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { ref, watch } from "vue"
 
 import RecordingStudio from "../recording/RecordingStudio.vue"
 import type { Project, Take } from "../../shared/types"
@@ -17,6 +17,15 @@ const emit = defineEmits<{
 const file = ref<File | null>(null)
 const isolate = ref(false)
 const studioOpen = ref(false)
+/** The take whose DELETE was pressed once and now asks to be confirmed. */
+const confirmingDelete = ref<string | null>(null)
+
+// A saved take arriving is the studio's cue to close. With reference vocals
+// the app moves on to Compare anyway; without them it stays here, and the
+// studio would otherwise sit open over the take it just saved.
+watch(() => props.project.takes.length, (count, previous) => {
+  if (count > previous) studioOpen.value = false
+})
 
 function chooseFile(event: Event): void {
   file.value = (event.target as HTMLInputElement).files?.[0] ?? null
@@ -36,10 +45,11 @@ function voiceChanged(take: Take): boolean {
   return take.status === "analyzed" && (take.reference_voice ?? "louder") !== props.project.reference_voice
 }
 
-function requestDelete(take: Take): void {
-  if (window.confirm(`Delete “${take.name}”? This cannot be undone.`)) {
-    emit("delete", take)
-  }
+// Confirmed in the page: the macOS app's webview answers window.confirm()
+// with "no" without showing anything, so deleting silently did nothing.
+function confirmDelete(take: Take): void {
+  confirmingDelete.value = null
+  emit("delete", take)
 }
 </script>
 
@@ -68,7 +78,7 @@ function requestDelete(take: Take): void {
         </button>
         <div class="take-actions">
           <button
-            v-if="project.reference.vocal_path"
+            v-if="project.reference.vocal_path && confirmingDelete !== take.id"
             class="take-reanalyze"
             :class="{ stale: voiceChanged(take) }"
             :disabled="busy"
@@ -80,11 +90,23 @@ function requestDelete(take: Take): void {
           >
             RE-ANALYZE
           </button>
+          <template v-if="confirmingDelete === take.id">
+            <button
+              class="take-delete armed"
+              :disabled="busy"
+              :aria-label="`Delete ${take.name} for good`"
+              @click="confirmDelete(take)"
+            >
+              CONFIRM
+            </button>
+            <button class="take-reanalyze" :aria-label="`Keep ${take.name}`" @click="confirmingDelete = null">KEEP</button>
+          </template>
           <button
+            v-else
             class="take-delete"
             :disabled="busy"
             :aria-label="`Delete ${take.name}`"
-            @click="requestDelete(take)"
+            @click="confirmingDelete = take.id"
           >
             DELETE
           </button>

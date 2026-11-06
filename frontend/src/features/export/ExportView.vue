@@ -152,7 +152,7 @@ onBeforeUnmount(clearPreview)
         </div>
       </section>
 
-      <audio v-if="previewUrl" ref="previewAudio" class="export-preview" controls :src="previewUrl"></audio>
+      <audio v-audio-output v-if="previewUrl" ref="previewAudio" class="export-preview" controls :src="previewUrl"></audio>
       <p v-if="error" class="inline-error">{{ error }}</p>
       <div class="export-actions">
         <button class="solid-button" :disabled="!selectedTake || !project.reference.instrumental_path || busy !== null" @click="requestExport(true)">

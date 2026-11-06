@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue"
 
 import { apiJson } from "../../shared/api"
+import { audioDevices } from "../../shared/audioDevices"
 import type { Project } from "../../shared/types"
 import {
   isIntervalScore,
@@ -156,6 +157,7 @@ const countdown = computed(() => {
     <p v-else-if="loadError" class="inline-error">{{ loadError }}</p>
 
     <template v-else-if="plan">
+      <p v-if="audioDevices.notice" class="inline-error">{{ audioDevices.notice }}</p>
       <p v-if="attempt.error.value" class="inline-error">{{ attempt.error.value }}</p>
 
       <section v-if="plan.warmup" class="feature-panel practice-panel">

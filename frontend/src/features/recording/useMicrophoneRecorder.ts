@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, ref } from "vue"
 
+import { openMicrophone } from "../../shared/audioDevices"
 import { createElapsedClock } from "./elapsedClock"
 
 export function useMicrophoneRecorder() {
@@ -55,8 +56,8 @@ export function useMicrophoneRecorder() {
     error.value = ""
     recordedFile.value = null
     try {
-      stream.value = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      stream.value = await openMicrophone({
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false,
       })
       const mimeType = preferredMimeType()
       recorder = new MediaRecorder(stream.value, mimeType ? { mimeType } : undefined)

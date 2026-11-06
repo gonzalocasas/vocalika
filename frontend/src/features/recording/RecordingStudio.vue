@@ -10,9 +10,8 @@ import { createScrollProgress, easeToward } from "./lyricsScroll"
 import TimedLyrics from "../reference/TimedLyrics.vue"
 import { useLyricsTiming } from "../reference/useLyricsTiming"
 import { useLivePitch } from "./useLivePitch"
-import { useMicrophoneRecorder } from "./useMicrophoneRecorder"
-
-import { recordingOffset, timingIsConsistent } from "./recordingTiming"
+import { audioDevices, latencyForPair } from "../../shared/audioDevices"
+import { useStudioRecorder } from "./useStudioRecorder"
 
 const props = defineProps<{ project: Project; busy: boolean }>()
 const emit = defineEmits<{
@@ -29,65 +28,14 @@ const voiceLevel = ref(35)
 const lyrics = ref(props.project.lyrics)
 const editingLyrics = ref(!props.project.lyrics.trim())
 const fontStep = ref(2)
-const vocalAudio = ref<HTMLAudioElement | null>(null)
-const instrumentalAudio = ref<HTMLAudioElement | null>(null)
-const recorder = useMicrophoneRecorder()
+const recorder = useStudioRecorder()
 const livePitch = useLivePitch()
 const recordedUrl = ref("")
-const capturedOffset = ref<number | null>(null)
-const timingError = ref("")
-let timingTimer: number | undefined
 
-function checkRecordingTiming(): void {
-  const reference = instrumentalAudio.value ?? vocalAudio.value
-  if (capturedOffset.value === null || !reference || recorder.state.value !== "recording") return
-  // A stem that has played to the end of its file is the song finishing, not
-  // drift: its clock stops while the take's keeps running until the stop
-  // timer (scheduled from the metadata duration) fires.
-  if (referenceFinished()) {
-    stopRecording()
-    return
-  }
-  const other = instrumentalAudio.value && vocalAudio.value ? vocalAudio.value.currentTime : undefined
-  const elapsed = recorder.readElapsed()
-  if (!timingIsConsistent(capturedOffset.value, elapsed, reference.currentTime, other)) {
-    // The clock readings go in the message: a sync failure seen only on one
-    // browser engine is otherwise impossible to tell apart from a real one.
-    const seconds = (value: number) => `${value.toFixed(2)} s`
-    const readings = [
-      `take ${seconds(elapsed)}`,
-      `backing ${seconds(reference.currentTime)}`,
-      ...(other === undefined ? [] : [`vocal ${seconds(other)}`]),
-      `anchored offset ${seconds(capturedOffset.value)}`,
-    ].join(", ")
-    timingError.value =
-      `Recording stopped because the backing track lost sync. Please record a new take. (${readings})`
-    stopRecording()
-  }
-}
-
-function referenceFinished(): boolean {
-  return [vocalAudio.value, instrumentalAudio.value].some((element) => element?.ended === true)
-}
-
-function onReferenceEnded(): void {
-  if (recorder.state.value === "recording") stopRecording()
-}
-
-function clearTimingCheck(): void {
-  if (timingTimer !== undefined) window.clearInterval(timingTimer)
-  timingTimer = undefined
-}
-
-function startTimingCheck(): void {
-  clearTimingCheck()
-  timingTimer = window.setInterval(checkRecordingTiming, 100)
-}
 const contour = ref<ReferenceContour | null>(null)
 const monitorTime = ref(0)
 const lyricsView = ref<HTMLElement | null>(null)
 const autoScroll = ref(true)
-let stopTimer: number | undefined
 let scrollFrame: number | undefined
 let lastFrameAt = 0
 let suspendScrollUntil = 0
@@ -155,8 +103,7 @@ function scrollLoop(timestamp: number): void {
   lastFrameAt = timestamp
   // The live-pitch callback only ticks while there is input to analyse; the
   // highlight has to move every frame the backing track does.
-  const clockSource = vocalAudio.value ?? instrumentalAudio.value
-  if (recording.value && clockSource) monitorTime.value = clockSource.currentTime
+  if (recording.value) monitorTime.value = recorder.position()
   if (element && autoScroll.value && inTake.value && timestamp >= suspendScrollUntil) {
     const range = element.scrollHeight - element.clientHeight
     const wanted = timedLines.value
@@ -184,137 +131,78 @@ const timecode = computed(() => {
   return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(1).padStart(4, "0")}`
 })
 
-function stopMonitor(): void {
-  vocalAudio.value?.pause()
-  instrumentalAudio.value?.pause()
-  if (stopTimer !== undefined) window.clearTimeout(stopTimer)
-  stopTimer = undefined
-}
-
 function referenceEnd(): number {
   return props.project.trim_end_seconds ?? props.project.reference.duration_seconds
 }
 
-/**
- * Start the reference and resolve once every stem's clock is actually moving.
- *
- * WebKit (Safari, and the macOS desktop app) resolves play() before audio
- * flows: currentTime then holds still for 0.1-0.3 s, each element after its
- * own delay. Anything timed against the reference straight after play() (the
- * take's anchored offset, the resumed recorder) would build that stall in, and
- * the sync check would stop the take moments later.
- */
-async function playMonitor(timeoutMs = 3000): Promise<void> {
-  const elements = [vocalAudio.value, instrumentalAudio.value]
-    .filter((element): element is HTMLAudioElement => element !== null)
-  const starts = elements.map((element) => element.currentTime)
-  await Promise.all(elements.map((element) => element.play()))
-  const deadline = performance.now() + timeoutMs
-  while (!elements.every((element, index) => element.currentTime > starts[index])) {
-    if (performance.now() > deadline) throw new Error("The backing track did not start playing.")
-    await new Promise((resolve) => window.setTimeout(resolve, 5))
-  }
+/** The stems, in the key the singer has chosen, decoded for the studio's clock. */
+function loadBackingTrack(): void {
+  const { id, updated_at: version, transpose_semitones: transpose, reference } = props.project
+  const url = (kind: string) => `/api/projects/${id}/audio/${kind}?v=${version}&transpose=${transpose}`
+  void recorder.load({
+    vocal: reference.vocal_path ? url("vocal") : undefined,
+    instrumental: reference.instrumental_path ? url("instrumental") : undefined,
+  })
 }
 
-/**
- * Schedule the automatic stop from where the reference actually is.
- *
- * Deriving the deadline from the monitor's position rather than from a fixed
- * duration set at the start is what lets a take be paused: the remaining time
- * is recomputed on every resume instead of running down during the gap.
- */
-function armStopTimer(): void {
-  if (stopTimer !== undefined) window.clearTimeout(stopTimer)
-  const clockSource = vocalAudio.value ?? instrumentalAudio.value
-  const position = clockSource?.currentTime ?? props.project.trim_start_seconds
-  stopTimer = window.setTimeout(stopRecording, Math.max(0.1, referenceEnd() - position) * 1000)
-}
+/** Half the live pitch analysis window: a detected pitch describes its middle. */
+const LIVE_ANALYSIS_DELAY = 1024 / 44_100
 
-// Time comes from the monitor element, not the wall clock: the ribbon has to
-// stay locked to the backing track the singer is actually hearing, and a
-// paused monitor must hold the ribbon still.
+/**
+ * How far behind the rendered position the voice being analysed now was sung:
+ * the round trip (heard late, captured late) plus the analysis window.
+ */
+const liveDelay = computed(() => (recorder.latency.value ?? 0) + LIVE_ANALYSIS_DELAY)
+
+// The ribbon reads the studio's audio clock, shifted back by liveDelay so
+// the singer's marker lines up with the note they were hearing as they sang
+// it. It holds still while a take is paused.
 async function startLivePitch(): Promise<void> {
-  const clockSource = vocalAudio.value ?? instrumentalAudio.value
   const stream = recorder.stream.value
   if (!stream) return
   await livePitch.start(stream, () => {
-    monitorTime.value = clockSource?.currentTime ?? 0
-    return monitorTime.value
+    monitorTime.value = recorder.position()
+    return monitorTime.value - liveDelay.value
   })
 }
+
+/** What the studio knows about this setup's round trip, for the mic line. */
+const latencyLabel = computed(() => {
+  const measured = recorder.latency.value ?? latencyForPair()?.seconds ?? null
+  return measured === null ? "latency not measured" : `latency ${Math.round(measured * 1000)} ms`
+})
 
 async function startRecording(): Promise<void> {
   // Reading and editing are different modes; nobody wants a textarea in front
   // of them while singing.
   editingLyrics.value = false
   livePitch.reset()
-  capturedOffset.value = null
-  timingError.value = ""
-  await recorder.start()
-  if (recorder.state.value !== "recording") return
-  const start = props.project.trim_start_seconds
-  if (vocalAudio.value) {
-    vocalAudio.value.currentTime = start
-    vocalAudio.value.volume = voiceLevel.value / 100
-  }
-  if (instrumentalAudio.value) {
-    instrumentalAudio.value.currentTime = start
-    instrumentalAudio.value.volume = 1
-  }
   if (lyricsView.value) lyricsView.value.scrollTop = 0
   easedScrollTop = Number.NaN
   suspendScrollUntil = 0
-  try {
-    await playMonitor()
-    const reference = instrumentalAudio.value ?? vocalAudio.value
-    if (!reference) throw new Error("Backing track is unavailable.")
-    capturedOffset.value = recordingOffset(recorder.readElapsed(), reference.currentTime)
-    startTimingCheck()
-    armStopTimer()
-    await startLivePitch()
-  } catch (reason) {
-    timingError.value = reason instanceof Error ? reason.message : String(reason)
-    stopRecording()
-  }
+  const voice = props.project.reference.vocal_path ? voiceLevel.value / 100 : 0
+  await recorder.start(props.project.trim_start_seconds, referenceEnd(), voice)
+  if (recorder.state.value === "recording") await startLivePitch()
 }
 
 function pauseRecording(): void {
-  // The recorder and the reference have to stop together, or the take would
-  // resume misaligned against the contour it is scored on.
-  checkRecordingTiming()
-  if (timingError.value) return
-  clearTimingCheck()
   recorder.pause()
-  stopMonitor()
   livePitch.stop()
 }
 
 async function resumeRecording(): Promise<void> {
-  try {
-    await playMonitor()
-    recorder.resume()
-    // Never re-anchor on resume: that would hide a pause/resume timing error.
-    checkRecordingTiming()
-    if (timingError.value || recorder.state.value !== "recording") return
-    startTimingCheck()
-    armStopTimer()
-    await startLivePitch()
-  } catch (reason) {
-    timingError.value = reason instanceof Error ? reason.message : String(reason)
-    stopRecording()
-  }
+  recorder.resume()
+  if (recorder.state.value === "recording") await startLivePitch()
 }
 
 function stopRecording(): void {
-  clearTimingCheck()
-  stopMonitor()
   livePitch.stop()
-  recorder.stop()
+  void recorder.stop()
 }
 
 function analyze(): void {
-  if (recorder.recordedFile.value && capturedOffset.value !== null && !timingError.value) {
-    emit("submit", recorder.recordedFile.value, isolate.value, capturedOffset.value)
+  if (recorder.recordedFile.value && recorder.offset.value !== null) {
+    emit("submit", recorder.recordedFile.value, isolate.value, recorder.offset.value)
   }
 }
 
@@ -336,11 +224,14 @@ watch(recorder.recordedFile, (file) => {
   if (recordedUrl.value) window.URL.revokeObjectURL(recordedUrl.value)
   recordedUrl.value = file ? window.URL.createObjectURL(file) : ""
 })
-watch(voiceLevel, (value) => {
-  if (vocalAudio.value) vocalAudio.value.volume = value / 100
+watch(voiceLevel, (value) => recorder.setVoiceLevel(value / 100))
+// A take finishing on its own (the song ended) stops the live display too.
+watch(recorder.state, (state) => {
+  if (state !== "recording") livePitch.stop()
 })
 onMounted(() => {
   void loadContour()
+  loadBackingTrack()
   try {
     const stored = Number(window.localStorage.getItem(FONT_STORAGE_KEY))
     if (Number.isFinite(stored) && stored >= 0 && stored < FONT_STEPS.length) fontStep.value = stored
@@ -352,9 +243,10 @@ onMounted(() => {
   scrollFrame = window.requestAnimationFrame(scrollLoop)
 })
 watch(() => [props.project.id, props.project.transpose_semitones, props.project.reference_voice], loadContour)
+watch(() => [props.project.id, props.project.transpose_semitones], () => {
+  if (!inTake.value) loadBackingTrack()
+})
 onBeforeUnmount(() => {
-  clearTimingCheck()
-  stopMonitor()
   livePitch.stop()
   if (recordedUrl.value) window.URL.revokeObjectURL(recordedUrl.value)
   window.removeEventListener("keydown", onKeydown)
@@ -434,7 +326,7 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
             :contour="contour"
             :samples="livePitch.samples.value"
             :current="livePitch.current.value"
-            :time="monitorTime"
+            :time="inTake ? monitorTime - liveDelay : monitorTime"
             :active="inTake"
           />
           <p class="live-cents" :class="{ live: recording }">
@@ -443,27 +335,26 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
           </p>
 
           <div class="record-readout" :class="{ live: recording, held: paused }">
-            <i></i><span>{{ recording ? "RECORDING" : paused ? "PAUSED" : "MIC READY" }}</span><strong>{{ timecode }}</strong>
+            <i></i><span>{{ recording ? "RECORDING" : paused ? "PAUSED" : recorder.state.value === "loading" ? "LOADING SONG" : "MIC READY" }}</span><strong>{{ timecode }}</strong>
           </div>
-          <p v-if="timingError" class="inline-error">{{ timingError }}</p>
           <p v-if="recorder.error.value" class="inline-error">{{ recorder.error.value }}</p>
 
           <button
             v-if="!inTake && !recorder.recordedFile.value"
             class="record-button"
-            :disabled="!recorder.supported.value || recorder.state.value === 'requesting'"
+            :disabled="!recorder.supported.value || recorder.state.value === 'requesting' || recorder.state.value === 'loading'"
             @click="startRecording"
           >● START RECORDING</button>
           <div v-else-if="inTake" class="take-transport">
             <button v-if="recording" class="hold-button" @click="pauseRecording">❚❚ PAUSE</button>
             <button v-else class="hold-button resume" @click="resumeRecording">▶ RESUME</button>
-            <button class="record-button live" @click="stopRecording">■ STOP</button>
+            <button class="record-button live" :disabled="recorder.state.value === 'requesting'" @click="stopRecording">■ STOP</button>
           </div>
 
-          <template v-if="recorder.recordedFile.value">
-            <audio class="recorded-preview" controls :src="recordedUrl"></audio>
+          <template v-if="recorder.recordedFile.value && !inTake">
+            <audio v-audio-output class="recorded-preview" controls :src="recordedUrl"></audio>
             <label v-if="project.reference.vocal_path" class="check-row"><input v-model="isolate" type="checkbox" /> Isolate my vocal first</label>
-            <button class="accent-button full" :disabled="busy || !!timingError || capturedOffset === null" @click="analyze">
+            <button class="accent-button full" :disabled="busy || recorder.offset.value === null" @click="analyze">
               {{ busy ? "SAVING…" : project.reference.vocal_path ? "SAVE & ANALYZE TAKE →" : "SAVE TAKE →" }}
             </button>
             <button class="text-button" @click="recorder.discard">DISCARD & RECORD AGAIN</button>
@@ -474,18 +365,13 @@ watch(() => props.project.lyrics, (value) => { lyrics.value = value })
             <input v-model.number="voiceLevel" type="range" min="0" max="100" />
             <small>Adjust live · 0% is karaoke · instrumental stays at full level</small>
           </label>
+          <p v-if="audioDevices.notice" class="inline-error mic-in-use">{{ audioDevices.notice }}</p>
+          <p v-else-if="audioDevices.inputInUse" class="feature-note mic-in-use">Mic: {{ audioDevices.inputInUse }} · {{ latencyLabel }}</p>
+          <p v-if="audioDevices.outputNotice" class="inline-error">{{ audioDevices.outputNotice }}</p>
           <p class="feature-note">Use headphones. The monitor mix is not embedded in the saved take.</p>
         </aside>
       </div>
 
-      <audio v-if="project.reference.vocal_path" ref="vocalAudio" preload="auto" @ended="onReferenceEnded" :src="`/api/projects/${project.id}/audio/vocal?v=${project.updated_at}&transpose=${project.transpose_semitones}`"></audio>
-      <audio
-        v-if="project.reference.instrumental_path"
-        ref="instrumentalAudio"
-        preload="auto"
-        @ended="onReferenceEnded"
-        :src="`/api/projects/${project.id}/audio/instrumental?v=${project.updated_at}&transpose=${project.transpose_semitones}`"
-      ></audio>
     </section>
   </div>
 </template>
