@@ -1,4 +1,4 @@
-//! Vocalika desktop launcher (spike).
+//! Vocalika desktop launcher.
 //!
 //! The installer ships no Python environment. On first start this launcher
 //! builds one with the bundled `uv` from the bundled lock export and wheel,
@@ -23,6 +23,8 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 
 const PYTHON_VERSION: &str = "3.12";
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(180);
+/// Outside the ranges servers and dev tools usually pick.
+const PREFERRED_PORT: u16 = 47_615;
 
 #[derive(Default)]
 struct Launcher {
@@ -36,10 +38,19 @@ struct Progress {
     fraction: f64,
 }
 
+/// Everything the app writes lives under one folder (the app's local data
+/// folder), so deleting it removes the app completely. Projects are the
+/// exception: they go to the data folder the singer picks in the app.
 struct Paths {
     resources: PathBuf,
+    /// Python, the environment and uv's download cache: rebuilt on update.
     runtime: PathBuf,
     env: PathBuf,
+    /// Downloaded models (about 1.4 GB): kept across updates.
+    models: PathBuf,
+    /// Vocalika's analysis cache (decoded audio, stems, pitch tracks).
+    cache: PathBuf,
+    settings: PathBuf,
     library: PathBuf,
     log: PathBuf,
 }
@@ -57,6 +68,9 @@ impl Paths {
             resources,
             env: runtime.join("env"),
             runtime,
+            models: data.join("models"),
+            cache: data.join("cache"),
+            settings: data.join("settings.json"),
             library: data.join("library"),
             log: data.join("server.log"),
         })
@@ -66,12 +80,14 @@ impl Paths {
         self.resources.join(if cfg!(windows) { "uv.exe" } else { "uv" })
     }
 
+    /// The environment's executables: python, and the `demucs` and `yt-dlp`
+    /// commands the server runs.
+    fn env_bin(&self) -> PathBuf {
+        self.env.join(if cfg!(windows) { "Scripts" } else { "bin" })
+    }
+
     fn python(&self) -> PathBuf {
-        if cfg!(windows) {
-            self.env.join("Scripts").join("python.exe")
-        } else {
-            self.env.join("bin").join("python")
-        }
+        self.env_bin().join(if cfg!(windows) { "python.exe" } else { "python" })
     }
 
     fn installed_stamp(&self) -> PathBuf {
@@ -243,22 +259,30 @@ fn run(app: &AppHandle, paths: &Paths, program: &Path, args: &[&str]) -> Result<
 }
 
 /// Keep uv and the app on their own files: no user uv config, no system
-/// Python, and the bundled ffmpeg first on PATH.
+/// Python, the environment's commands first on PATH, and every cache and
+/// model download inside the app's data folder rather than the user's
+/// `~/.cache` or `~/Library/Caches`.
 fn isolated_environment(paths: &Paths) -> Vec<(String, String)> {
-    let bin = paths.resources.join("bin");
-    let mut search = vec![bin];
+    let mut search = vec![paths.env_bin()];
     if let Some(existing) = std::env::var_os("PATH") {
         search.extend(std::env::split_paths(&existing));
     }
+    let text = |path: PathBuf| path.to_string_lossy().into_owned();
     vec![
         ("UV_NO_CONFIG".into(), "1".into()),
-        ("UV_CACHE_DIR".into(), paths.runtime.join("cache").to_string_lossy().into()),
-        ("UV_PYTHON_INSTALL_DIR".into(), paths.runtime.join("python").to_string_lossy().into()),
+        ("UV_CACHE_DIR".into(), text(paths.runtime.join("cache"))),
+        ("UV_PYTHON_INSTALL_DIR".into(), text(paths.runtime.join("python"))),
         ("PYTHONUNBUFFERED".into(), "1".into()),
-        (
-            "PATH".into(),
-            std::env::join_paths(search).unwrap_or_default().to_string_lossy().into(),
-        ),
+        // torch hub: the demucs, RMVPE and MMS weights.
+        ("TORCH_HOME".into(), text(paths.models.join("torch"))),
+        ("HF_HOME".into(), text(paths.models.join("huggingface"))),
+        ("VOCALIKA_CACHE_DIR".into(), text(paths.cache.clone())),
+        ("VOCALIKA_SETTINGS".into(), text(paths.settings.clone())),
+        // Anything else that follows the XDG convention (yt-dlp's cache) or
+        // keeps its own config folder (matplotlib, if a library pulls it in).
+        ("XDG_CACHE_HOME".into(), text(paths.runtime.join("xdg-cache"))),
+        ("MPLCONFIGDIR".into(), text(paths.runtime.join("matplotlib"))),
+        ("PATH".into(), text(std::env::join_paths(search).unwrap_or_default().into())),
     ]
 }
 
@@ -275,11 +299,16 @@ fn hide_console(_: &mut Command) {}
 fn serve(app: &AppHandle, paths: &Paths) -> Result<(), String> {
     progress(app, "Starting Vocalika…", 1.0);
     let started = Instant::now();
-    // Ask the OS for a free port rather than assuming 8000: a server left over
-    // from a crash, or anything else the user runs, may hold a fixed one.
-    let port = TcpListener::bind("127.0.0.1:0")
-        .and_then(|listener| listener.local_addr())
-        .map_err(|e| e.to_string())?
+    // The page's origin includes the port, and the webview keys what it
+    // remembers by origin: the chosen microphone and output, the lyrics size,
+    // the microphone permission. So prefer the same port every launch, and
+    // only when something else holds it (a server left over from a crash,
+    // another program) take any free one for this session.
+    let port = [PREFERRED_PORT, 0]
+        .into_iter()
+        .find_map(|port| TcpListener::bind(("127.0.0.1", port)).ok())
+        .and_then(|listener| listener.local_addr().ok())
+        .ok_or("No local port is free for the server.")?
         .port();
     fs::create_dir_all(&paths.library).map_err(|e| e.to_string())?;
     let log = fs::File::create(&paths.log).map_err(|e| e.to_string())?;

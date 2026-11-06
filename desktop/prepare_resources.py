@@ -7,8 +7,10 @@ one reproducibly on the user's machine:
 * ``requirements.txt`` - ``uv.lock`` exported with hashes (the real-input
   extra included, dev tools excluded), so every machine gets the exact
   versions the repository is tested with;
-* the Vocalika wheel  - the app itself, with the built web UI inside;
-* ``bin/ffmpeg`` and ``bin/ffprobe`` - put on the server's PATH.
+* the Vocalika wheel  - the app itself, with the built web UI inside.
+
+Audio decoding and encoding go through PyAV, whose wheels carry FFmpeg's
+libraries, so no ffmpeg executable is bundled.
 
 Run from desktop/: ``python3 prepare_resources.py``.
 """
@@ -44,7 +46,7 @@ def which(name: str, override_variable: str) -> Path:
 def main() -> None:
     if RESOURCES.exists():
         shutil.rmtree(RESOURCES)
-    (RESOURCES / "bin").mkdir(parents=True)
+    RESOURCES.mkdir(parents=True)
 
     run("npm", "run", "build", cwd=REPOSITORY / "frontend")
     run("uv", "build", "--wheel", "--out-dir", str(RESOURCES))
@@ -56,18 +58,6 @@ def main() -> None:
 
     # The launcher shells out to this uv, never to one on the user's PATH.
     shutil.copy2(which("uv", "VOCALIKA_UV"), RESOURCES / f"uv{EXE}")
-
-    # SPIKE: copies whatever ffmpeg is on PATH. A Homebrew build links against
-    # /opt/homebrew dylibs, so it only works on machines that have them. A
-    # release needs static ffmpeg/ffprobe builds per platform (see the notes).
-    ffmpeg_dir = os.environ.get("VOCALIKA_FFMPEG_DIR")
-    for tool in ("ffmpeg", "ffprobe"):
-        source = Path(ffmpeg_dir) / f"{tool}{EXE}" if ffmpeg_dir else which(tool, "_unused")
-        target = RESOURCES / "bin" / f"{tool}{EXE}"
-        shutil.copy2(source, target)
-        # Homebrew installs these read-only; Tauri must be able to overwrite
-        # its bundled copy on the next build.
-        target.chmod(0o755)
 
     # One stamp for "this installer's environment": any change to the locked
     # dependencies or the app wheel makes the launcher rebuild on next start.
