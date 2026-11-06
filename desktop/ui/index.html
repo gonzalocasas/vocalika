@@ -11,10 +11,11 @@
         font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       main { width: min(460px, 86vw); }
-      h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+      h1 { margin: 0 0 22px; }
+      h1 img { display: block; width: 100%; height: auto; }
       #step { color: #b9b6b1; margin: 0 0 18px; }
       .bar { height: 6px; border-radius: 3px; background: #24272a; overflow: hidden; }
-      .bar > div { height: 100%; width: 0; background: #e2b45c; transition: width .4s ease; }
+      .bar > div { height: 100%; width: 0; background: #e6a21c; transition: width .4s ease; }
       #detail {
         margin-top: 10px; color: #7d7a76; font: 12px ui-monospace, Menlo, monospace;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -26,13 +27,13 @@
       }
       button {
         font: inherit; padding: 6px 16px; border-radius: 6px; border: 0;
-        background: #e2b45c; color: #111; cursor: pointer;
+        background: #e6a21c; color: #111; cursor: pointer;
       }
     </style>
   </head>
   <body>
     <main>
-      <h1>Vocalika</h1>
+      <h1><img src="lockup.svg" alt="Vocalika — Vocal Training" /></h1>
       <p id="step">Starting…</p>
       <div class="bar"><div id="fill"></div></div>
       <div id="detail"></div>

@@ -322,7 +322,7 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
     <header class="top-bar">
       <div>
         <a class="brand" href="/" aria-label="Vocalika home">
-          <img class="header-logo" src="/brand/header-logo.png" alt="Vocalika" />
+          <img class="header-logo" src="/brand/header-logo.svg" alt="Vocalika" />
         </a>
       </div>
       <div>
