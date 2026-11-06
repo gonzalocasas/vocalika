@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 
 from vocalika.api.app import create_app
 from vocalika.api.projects import _project_payload
+from vocalika.audio import media
 from vocalika.projects.export import ProjectExportService, _route_channels
 from vocalika.projects.models import Project, ProjectReference, Take
 from vocalika.projects.repository import ProjectRepository
@@ -39,20 +39,7 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
     take_wav = take_directory / "recorded.wav"
     take_path = take_directory / "source.webm"
     sf.write(take_wav, take_vocal, sample_rate)
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-y",
-            "-i",
-            str(take_wav),
-            "-c:a",
-            "libopus",
-            str(take_path),
-        ],
-        check=True,
-    )
+    media.transcode(take_wav, take_path, codec="libopus", sample_rate=48_000)
     artifact_path = take_directory / "analysis.json"
     artifact_path.write_text(
         json.dumps(

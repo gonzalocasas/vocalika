@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 import hashlib
-import json
-import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import soundfile as sf
 from numpy.typing import NDArray
 
+from vocalika.audio import media
+from vocalika.audio.media import AudioDecodeError
 
-class AudioDecodeError(RuntimeError):
-    """Raised when ffmpeg or ffprobe cannot process an input."""
+__all__ = [
+    "AudioDecodeError",
+    "AudioInfo",
+    "decode_for_analysis",
+    "hash_file",
+    "load_audio",
+    "probe_audio",
+]
 
 
 @dataclass(frozen=True)
@@ -42,66 +47,23 @@ def probe_audio(path: Path) -> AudioInfo:
     resolved = path.expanduser().resolve()
     if not resolved.is_file():
         raise AudioDecodeError(f"Audio file does not exist: {resolved}")
-
-    command = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-select_streams",
-        "a:0",
-        "-show_entries",
-        "format=format_name,duration:stream=sample_rate,channels",
-        "-of",
-        "json",
-        str(resolved),
-    ]
-    try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
-    except (FileNotFoundError, subprocess.CalledProcessError) as error:
-        detail = getattr(error, "stderr", "") or str(error)
-        raise AudioDecodeError(f"Unable to inspect {resolved.name}: {detail.strip()}") from error
-
-    payload: dict[str, Any] = json.loads(result.stdout)
-    streams = payload.get("streams", [])
-    if not streams:
-        raise AudioDecodeError(f"No audio stream found in {resolved.name}")
-    stream = streams[0]
-    format_data = payload.get("format", {})
+    info = media.probe(resolved)
     return AudioInfo(
         path=str(resolved),
         content_hash=hash_file(resolved),
-        format_name=str(format_data.get("format_name", "unknown")),
-        duration_seconds=float(format_data.get("duration", 0.0)),
-        sample_rate=int(stream["sample_rate"]),
-        channels=int(stream["channels"]),
+        format_name=info.format_name,
+        duration_seconds=info.duration_seconds,
+        sample_rate=info.sample_rate,
+        channels=info.channels,
         extension=resolved.suffix.lower(),
     )
 
 
 def decode_for_analysis(source: Path, destination: Path, sample_rate: int = 16_000) -> Path:
+    """Write `source` as a mono float32 WAV at `sample_rate`."""
+    samples, rate = media.decode(source.expanduser().resolve(), sample_rate=sample_rate, mono=True)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    command = [
-        "ffmpeg",
-        "-v",
-        "error",
-        "-y",
-        "-i",
-        str(source.expanduser().resolve()),
-        "-map",
-        "0:a:0",
-        "-ac",
-        "1",
-        "-ar",
-        str(sample_rate),
-        "-c:a",
-        "pcm_f32le",
-        str(destination),
-    ]
-    try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
-    except (FileNotFoundError, subprocess.CalledProcessError) as error:
-        detail = getattr(error, "stderr", "") or str(error)
-        raise AudioDecodeError(f"Unable to decode {source.name}: {detail.strip()}") from error
+    sf.write(destination, samples[:, 0], rate, subtype="FLOAT")
     return destination
 
 

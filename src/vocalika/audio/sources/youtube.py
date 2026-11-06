@@ -53,11 +53,13 @@ class YouTubeAudioSource:
 
         directory.mkdir(parents=True, exist_ok=True)
         output_template = directory / "source.%(ext)s"
+        # The audio stream is kept exactly as YouTube serves it (Opus in WebM,
+        # or AAC in M4A). `--extract-audio` would only remux it, and needs an
+        # ffmpeg executable to do so; PyAV reads either container directly.
         command = [
             "yt-dlp",
             "--no-playlist",
             "--no-progress",
-            "--extract-audio",
             "--format",
             "bestaudio/best",
             "--write-info-json",

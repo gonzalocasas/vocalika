@@ -1,40 +1,16 @@
 from __future__ import annotations
 
 import math
-import subprocess
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
+from vocalika.audio import media
+from vocalika.audio.media import AudioDecodeError
 from vocalika.projects.models import Project
 from vocalika.projects.repository import ProjectRepository
 
 ReferenceAudioKind = Literal["mix", "vocal", "instrumental"]
-
-
-def _probe(path: Path, entries: str) -> str | None:
-    """The first value ffprobe reports for `entries`, or None when it cannot say."""
-    try:
-        probe = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-select_streams",
-                "a:0",
-                "-show_entries",
-                entries,
-                "-of",
-                "csv=p=0",
-                str(path),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return probe.stdout.strip().splitlines()[0]
-    except (FileNotFoundError, subprocess.CalledProcessError, IndexError):
-        return None
 
 
 def _source_sample_rate(path: Path, fallback: int) -> int:
@@ -48,17 +24,10 @@ def _source_sample_rate(path: Path, fallback: int) -> int:
     them, leaving it 8.8% fast and short of the requested transposition.
     """
     try:
-        rate = int(_probe(path, "stream=sample_rate") or "")
-    except ValueError:
+        rate = media.probe(path).sample_rate
+    except AudioDecodeError:
         return fallback
     return rate if rate > 0 else fallback
-
-
-def _duration_seconds(path: Path) -> float | None:
-    try:
-        return float(_probe(path, "format=duration") or "")
-    except ValueError:
-        return None
 
 
 def _keeps_duration(rendered: Path, source: Path) -> bool:
@@ -69,8 +38,8 @@ def _keeps_duration(rendered: Path, source: Path) -> bool:
     above play 8.8% short and sharp -- and has to be rendered again.
     Unreadable durations are not accepted as evidence of a valid render.
     """
-    rendered_seconds = _duration_seconds(rendered)
-    source_seconds = _duration_seconds(source)
+    rendered_seconds = media.duration_seconds(rendered)
+    source_seconds = media.duration_seconds(source)
     if rendered_seconds is None or not source_seconds:
         return False
     return (math.isfinite(rendered_seconds) and math.isfinite(source_seconds)
@@ -113,31 +82,15 @@ class ReferenceAudioService:
         temporary = destination.with_name(f".{destination.stem}-{uuid4().hex}.flac")
         ratio = transpose_ratio(steps)
         sample_rate = _source_sample_rate(source, project.reference.sample_rate)
-        audio_filter = (
-            f"asetrate={sample_rate}*{ratio:.12f},aresample={sample_rate},atempo={1.0 / ratio:.12f}"
-        )
+        filters = [
+            ("asetrate", f"{sample_rate}*{ratio:.12f}"),
+            ("aresample", str(sample_rate)),
+            ("atempo", f"{1.0 / ratio:.12f}"),
+        ]
         try:
-            subprocess.run(
-                [
-                    "ffmpeg",
-                    "-v",
-                    "error",
-                    "-y",
-                    "-i",
-                    str(source),
-                    "-map",
-                    "0:a:0",
-                    "-af",
-                    audio_filter,
-                    "-c:a",
-                    "flac",
-                    "-compression_level",
-                    "5",
-                    str(temporary),
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
+            media.transcode(
+                source, temporary, codec="flac", filters=filters,
+                options={"compression_level": "5"},
             )
             if not temporary.is_file() or temporary.stat().st_size == 0:
                 raise RuntimeError("Transposed audio renderer produced no output")
@@ -146,9 +99,8 @@ class ReferenceAudioService:
                     "Transposed audio changed duration; refusing an out-of-sync render"
                 )
             temporary.replace(destination)
-        except (FileNotFoundError, subprocess.CalledProcessError) as error:
-            detail = getattr(error, "stderr", "") or str(error)
-            raise RuntimeError(f"Unable to transpose reference audio: {detail.strip()}") from error
+        except AudioDecodeError as error:
+            raise RuntimeError(f"Unable to transpose reference audio: {error}") from error
         finally:
             temporary.unlink(missing_ok=True)
         return destination

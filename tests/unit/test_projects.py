@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +9,7 @@ import soundfile as sf
 from httpx import ASGITransport, AsyncClient
 
 from vocalika.api.app import create_app
+from vocalika.audio import media
 from vocalika.projects.models import Project, ProjectReference, Take
 from vocalika.projects.repository import ProjectRepository
 
@@ -26,20 +26,7 @@ async def test_projects_and_unanalyzed_takes_persist_across_app_instances(tmp_pa
     reference_bytes = _wav_bytes(tmp_path / "reference.wav")
     take_bytes = _wav_bytes(tmp_path / "take.wav", 240.0)
     recorded_webm = tmp_path / "recorded.webm"
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-y",
-            "-i",
-            str(tmp_path / "take.wav"),
-            "-c:a",
-            "libopus",
-            str(recorded_webm),
-        ],
-        check=True,
-    )
+    media.transcode(tmp_path / "take.wav", recorded_webm, codec="libopus", sample_rate=48_000)
     projects = tmp_path / "projects"
     app = create_app(
         None,

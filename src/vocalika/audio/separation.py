@@ -8,6 +8,10 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Protocol
 
+import soundfile as sf
+
+from vocalika.audio import media
+from vocalika.audio.media import AudioDecodeError
 from vocalika.audio.sources.base import AudioAsset
 from vocalika.cache.manager import CacheManager
 
@@ -78,6 +82,17 @@ class DemucsVocalSeparator:
             prefix="vocalika-separation-", dir=directory.parent
         ) as raw:
             temporary = Path(raw)
+            # demucs reads only what its bundled decoder knows (WAV, FLAC,
+            # MP3...) and shells out to an `ffmpeg` executable for the rest,
+            # which includes YouTube's Opus. Decoding here with PyAV's FFmpeg
+            # libraries hands it a lossless float WAV at the source's own
+            # rate and channels, so the separation input is unchanged.
+            track = temporary / "input.wav"
+            try:
+                samples, rate = media.decode(audio.path)
+            except AudioDecodeError as error:
+                raise SeparationError(f"Vocal separation failed: {error}") from error
+            sf.write(track, samples, rate, subtype="FLOAT")
             command = [
                 "demucs",
                 "--two-stems",
@@ -88,7 +103,7 @@ class DemucsVocalSeparator:
                 str(temporary),
                 "--filename",
                 "{stem}.{ext}",
-                str(audio.path),
+                str(track),
             ]
             try:
                 subprocess.run(command, check=True, capture_output=True, text=True)

@@ -111,3 +111,35 @@ def test_clean_pitch_is_cached_by_content_and_parameters(tmp_path: Path) -> None
     assert second.cache_hit
     assert not following_the_louder_voice.cache_hit
     np.testing.assert_array_equal(first.track.midi, second.track.midi)
+
+
+def test_cache_directory_can_be_moved_by_environment(tmp_path: Path, monkeypatch: Any) -> None:
+    monkeypatch.setenv("VOCALIKA_CACHE_DIR", str(tmp_path / "app-cache"))
+    assert CacheManager.default().root == tmp_path / "app-cache"
+
+
+def test_demucs_is_given_a_decoded_wav_for_formats_it_cannot_read(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """demucs needs an ffmpeg executable for Opus; it must never be asked to."""
+    from vocalika.audio import media
+
+    wav = tmp_path / "mix.wav"
+    write_wav(wav)
+    source = tmp_path / "source.webm"
+    media.transcode(wav, source, codec="libopus", sample_rate=48_000)
+    asset = LocalAudioSource(source).acquire()
+    received: list[tuple[str, int, int]] = []
+
+    def fake_run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        info = sf.info(command[-1])
+        received.append((Path(command[-1]).suffix, info.samplerate, info.channels))
+        output = Path(command[command.index("--out") + 1]) / "htdemucs"
+        write_wav(output / "vocals.wav")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("vocalika.audio.separation.subprocess.run", fake_run)
+    DemucsVocalSeparator(CacheManager(tmp_path / "cache")).separate(asset)
+
+    assert received == [(".wav", 48_000, 1)]

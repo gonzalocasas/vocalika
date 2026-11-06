@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import math
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Literal
 
 import numpy as np
@@ -12,6 +10,8 @@ import soundfile as sf
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
 
+from vocalika.audio import media
+from vocalika.audio.media import AudioDecodeError
 from vocalika.projects.models import Project, Take
 from vocalika.projects.reference_audio import ReferenceAudioService
 from vocalika.projects.repository import ProjectRepository, load_take_artifact
@@ -34,33 +34,11 @@ def _read_audio(path: Path, target_sample_rate: int) -> FloatAudio:
     try:
         audio, sample_rate = sf.read(path, dtype="float32", always_2d=True)
     except (OSError, RuntimeError, sf.LibsndfileError):
-        with TemporaryDirectory(prefix="vocalika-export-") as raw:
-            decoded = Path(raw) / "decoded.wav"
-            try:
-                subprocess.run(
-                    [
-                        "ffmpeg",
-                        "-v",
-                        "error",
-                        "-y",
-                        "-i",
-                        str(path),
-                        "-map",
-                        "0:a:0",
-                        "-ar",
-                        str(target_sample_rate),
-                        "-c:a",
-                        "pcm_f32le",
-                        str(decoded),
-                    ],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-            except (FileNotFoundError, subprocess.CalledProcessError) as error:
-                detail = getattr(error, "stderr", "") or str(error)
-                raise RuntimeError(f"Unable to decode {path.name}: {detail.strip()}") from error
-            audio, sample_rate = sf.read(decoded, dtype="float32", always_2d=True)
+        # Compressed formats soundfile cannot read (Opus, AAC...).
+        try:
+            audio, sample_rate = media.decode(path, sample_rate=target_sample_rate)
+        except AudioDecodeError as error:
+            raise RuntimeError(str(error)) from error
     if sample_rate == target_sample_rate:
         return np.asarray(audio, dtype=np.float32)
     divisor = math.gcd(sample_rate, target_sample_rate)
@@ -268,29 +246,12 @@ class ProjectExportService:
         if output_format in {"wav", "flac"}:
             sf.write(destination, audio, self.sample_rate)
             return
-        intermediate = destination.with_suffix(".source.wav")
-        sf.write(intermediate, audio, self.sample_rate, subtype="PCM_16")
+        # VBR quality 2, as `ffmpeg -q:a 2` before: libmp3lame reads
+        # its VBR quality from global_quality, in units of FF_QP2LAMBDA (118).
         try:
-            subprocess.run(
-                [
-                    "ffmpeg",
-                    "-v",
-                    "error",
-                    "-y",
-                    "-i",
-                    str(intermediate),
-                    "-codec:a",
-                    "libmp3lame",
-                    "-q:a",
-                    "2",
-                    str(destination),
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
+            media.encode(
+                audio, self.sample_rate, destination, codec="libmp3lame",
+                options={"flags": "+qscale", "global_quality": str(2 * 118)},
             )
-        except (FileNotFoundError, subprocess.CalledProcessError) as error:
-            detail = getattr(error, "stderr", "") or str(error)
-            raise RuntimeError(f"MP3 export failed: {detail.strip()}") from error
-        finally:
-            intermediate.unlink(missing_ok=True)
+        except AudioDecodeError as error:
+            raise RuntimeError(f"MP3 export failed: {error}") from error

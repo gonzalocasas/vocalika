@@ -54,7 +54,9 @@ reference, or split hard left and right so you can hear the two voices apart.
 ## Getting started
 
 Vocalika runs on macOS (Apple Silicon) with Python 3.12,
-[`uv`](https://docs.astral.sh/uv/), Node.js, and ffmpeg.
+[`uv`](https://docs.astral.sh/uv/) and Node.js. Audio is decoded and encoded
+through [PyAV](https://pyav.basswood-io.com/), whose wheels include FFmpeg's
+libraries, so no separate ffmpeg install is needed.
 
 ```bash
 uv sync --extra real-input

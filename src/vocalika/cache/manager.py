@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,14 @@ class CacheManager:
 
     @classmethod
     def default(cls) -> CacheManager:
+        """The per-user cache. ``VOCALIKA_CACHE_DIR`` points elsewhere.
+
+        The desktop app sets it so everything it writes stays in its own data
+        folder, and removing that folder removes the app completely.
+        """
+        override = os.environ.get("VOCALIKA_CACHE_DIR")
+        if override:
+            return cls(Path(override).expanduser())
         return cls(user_cache_path("vocalika"))
 
     def source_directory(self, source_key: str) -> Path:

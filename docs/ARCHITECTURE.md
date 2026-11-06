@@ -54,7 +54,7 @@ Everything else depends on this.
 - NumPy
 - SciPy
 - librosa where useful
-- ffmpeg
+- PyAV (FFmpeg's libraries, from its wheels) for decoding and encoding
 
 ## Pitch extraction
 
@@ -220,7 +220,7 @@ Conceptually:
 original source
       │
       ▼
-    ffmpeg
+ PyAV (FFmpeg)
       │
       ▼
 analysis WAV

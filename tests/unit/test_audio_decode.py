@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import numpy as np
 import pytest
 import soundfile as sf
 
+from vocalika.audio import media
 from vocalika.audio.decode import decode_for_analysis, hash_file, load_audio, probe_audio
 
 
@@ -44,20 +44,7 @@ def test_expected_reference_formats_decode(
     source_wav = tmp_path / "source.wav"
     sf.write(source_wav, 0.2 * np.sin(2.0 * np.pi * 220.0 * times), sample_rate)
     source = tmp_path / f"reference.{extension}"
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-y",
-            "-i",
-            str(source_wav),
-            "-c:a",
-            codec,
-            str(source),
-        ],
-        check=True,
-    )
+    media.transcode(source_wav, source, codec=codec)
 
     info = probe_audio(source)
     decoded = decode_for_analysis(source, tmp_path / f"{extension}-analysis.wav")
