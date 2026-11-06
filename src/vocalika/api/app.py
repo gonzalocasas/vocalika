@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import mimetypes
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +30,11 @@ from vocalika.storage import PROJECTS_FOLDER, StorageManager, StorageSettings
 from vocalika.storage import projects_directory as storage_projects_directory
 
 AnalysisRunner = Callable[..., Path]
+
+# Python labels FLAC "audio/x-flac", which WebKit (Safari and the macOS app)
+# refuses to play: a transposed reference then fails with "The operation is
+# not supported". Chromium accepts either. "audio/flac" is the registered type.
+mimetypes.add_type("audio/flac", ".flac")
 
 
 class SPAStaticFiles(StaticFiles):

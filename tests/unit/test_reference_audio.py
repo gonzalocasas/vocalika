@@ -156,3 +156,11 @@ def test_duration_guard_rejects_small_drift_and_unreadable_files(tmp_path: Path)
     sf.write(drifted, np.zeros(29900, dtype=np.float32), 1000)
     assert not _keeps_duration(drifted, source)
     assert not _keeps_duration(tmp_path / "missing.wav", source)
+
+
+def test_flac_is_served_with_the_type_webkit_plays() -> None:
+    import mimetypes
+
+    import vocalika.api.app  # noqa: F401  (registers the type)
+
+    assert mimetypes.guess_type("vocal_-5.flac")[0] == "audio/flac"
