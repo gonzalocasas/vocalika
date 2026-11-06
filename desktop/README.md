@@ -124,5 +124,28 @@ studio's latency calibration includes it. Test new audio features in Safari.
   decouple the two.
 - **Uninstall on macOS** leaves the data folder, as dragging any Mac app to
   the bin does. An "uninstall" action in the app could remove it.
-- **Signing and notarization.** The DMG now builds; neither it nor the NSIS
-  installer is signed yet.
+- **Signing and notarization.** The Mac app is signed ad hoc, so macOS
+  shows "unidentified developer" and offers **Open Anyway** in System
+  Settings → Privacy & Security, instead of calling it damaged. Windows
+  shows a SmartScreen warning. Proper signing needs an Apple Developer ID
+  (Tauri reads `APPLE_CERTIFICATE`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
+  `APPLE_PASSWORD`, `APPLE_TEAM_ID`) and a Windows code-signing
+  certificate.
+
+## Releasing
+
+Releases are cut by [Release Please](https://github.com/googleapis/release-please)
+(`.github/workflows/release.yml`), from Conventional Commit messages:
+
+1. Every push to main updates an open release pull request: the next
+   version (`feat:` bumps minor, `fix:` patch, while below 1.0) and the
+   changelog. It bumps the version in `pyproject.toml`, `tauri.conf.json`,
+   `Cargo.toml` and both `package.json` files together.
+2. Merging that pull request tags the release and publishes it.
+3. The same workflow then builds the installers on macOS (Apple Silicon)
+   and Windows, and attaches them to the release: `Vocalika_<version>_aarch64.dmg`
+   and `Vocalika_<version>_x64-setup.exe`.
+
+To rebuild the installers of an existing release, run the workflow by hand
+with its tag. Intel Macs are not a target: numba, llvmlite and sphn publish
+no x86_64 macOS wheels at the locked versions.

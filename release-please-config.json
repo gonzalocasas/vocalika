@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "include-component-in-tag": false,
+  "bump-minor-pre-major": true,
+  "packages": {
+    ".": {
+      "release-type": "python",
+      "package-name": "vocalika",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        { "type": "json", "path": "desktop/src-tauri/tauri.conf.json", "jsonpath": "$.version" },
+        { "type": "toml", "path": "desktop/src-tauri/Cargo.toml", "jsonpath": "$.package.version" },
+        { "type": "json", "path": "desktop/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "frontend/package.json", "jsonpath": "$.version" }
+      ]
+    }
+  }
+}

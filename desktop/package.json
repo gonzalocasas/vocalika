@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "resources": "python3 prepare_resources.py",
+    "resources": "uv run --no-project prepare_resources.py",
     "dev": "npm run resources && tauri dev",
     "build": "npm run resources && tauri build"
   },
