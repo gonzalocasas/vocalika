@@ -106,6 +106,14 @@ def plot_command(
     typer.echo(f"Plot written to {result}")
 
 
+def _frontend_directory() -> Path:
+    """The built web UI: the repository's build when developing, else the wheel's copy."""
+    repository_build = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    if repository_build.is_dir():
+        return repository_build
+    return Path(__file__).resolve().parent / "web"
+
+
 @app.command()
 def serve(
     analysis: Annotated[
@@ -130,8 +138,7 @@ def serve(
     ] = None,
 ) -> None:
     """Serve the analysis workspace, optionally opening an analysis."""
-    repository_root = Path(__file__).resolve().parents[2]
-    frontend_directory = repository_root / "frontend" / "dist"
+    frontend_directory = _frontend_directory()
     analyses_directory = analyses_directory.expanduser().resolve()
     web_analysis_runner = partial(run_analysis, cache_directory=cache_directory)
     uvicorn.run(

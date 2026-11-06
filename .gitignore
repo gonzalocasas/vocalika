@@ -26,3 +26,6 @@ tests/external-data/
 # Personal/copyrighted audio fixtures stay local.
 samples/*
 !samples/.gitkeep
+
+# Desktop launcher dependencies
+desktop/node_modules/
