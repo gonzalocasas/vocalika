@@ -82,6 +82,15 @@ def main() -> None:
     shutil.copyfile(BRAND / "lockup.svg", ROOT / "desktop" / "ui" / "lockup.svg")
     render(master("app-icon"), ROOT / "desktop" / "src-tauri" / "app-icon.png", 1024)
 
+    # Website: the lockup and favicon, the app icon for home screens, and the
+    # card link previews show (1200x630, the size Open Graph asks for).
+    site = ROOT / "site" / "brand"
+    site.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(BRAND / "lockup.svg", site / "lockup.svg")
+    shutil.copyfile(BRAND / "mark.svg", site / "favicon.svg")
+    render(master("app-icon"), site / "app-icon.png", 180)
+    render(framed("lockup", 1200, 630, 940, INK), site / "social.png", 1200)
+
 
 if __name__ == "__main__":
     main()

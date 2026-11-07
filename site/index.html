@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vocalika · Vocal training against the songs you want to sing</title>
+<meta name="description" content="Sing any song, see exactly where you went flat or rushed, in cents and milliseconds. Free, open source, and private: everything runs on your own computer." />
+<meta property="og:title" content="Vocalika" />
+<meta property="og:description" content="Vocal training against the songs you actually want to sing. Pitch and timing feedback in cents and milliseconds." />
+<meta property="og:image" content="https://gonzalocasas.github.io/vocalika/brand/social.png" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#171a1c" />
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="brand/app-icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
+<style>
+  /* The app's own palette and type: graphite surfaces, cream ink, amber accent. */
+  :root {
+    color-scheme: dark;
+    --ink: #0e1011;
+    --surface: #171a1c;
+    --raised: #1f2325;
+    --line: #33383a;
+    --cream: #f2ede3;
+    --text: #e8e2d6;
+    --muted: #a8a49a;
+    --faint: #7c817f;
+    --accent: #e6a21c;
+    --mine: #d9992e;
+    --secondary: #3fa08e;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    --sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--surface); color: var(--text);
+    font: 16px/1.6 var(--sans); font-synthesis: none; text-rendering: optimizeLegibility;
+  }
+  a { color: inherit; }
+  img, svg { max-width: 100%; }
+  .wrap { width: min(1120px, 100%); margin: 0 auto; padding-inline: max(20px, 4vw); }
+  .eyebrow {
+    margin: 0 0 14px; color: var(--faint);
+    font: 600 11px/1.4 var(--mono); letter-spacing: .2em; text-transform: uppercase;
+  }
+  .eyebrow b { color: var(--accent); font-weight: 600; }
+
+  /* Header */
+  header { border-bottom: 1px solid var(--line); }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; }
+  header img { display: block; height: 34px; width: auto; }
+  .nav { display: flex; gap: 22px; font: 500 11px var(--mono); letter-spacing: .14em; }
+  .nav a { color: var(--faint); text-decoration: none; }
+  .nav a:hover { color: var(--accent); }
+
+  /* Hero */
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: clamp(32px, 5vw, 72px); align-items: center; padding-block: clamp(48px, 9vw, 112px) clamp(48px, 7vw, 88px); }
+  h1 { margin: 0 0 22px; color: var(--cream); font-size: clamp(44px, 6.4vw, 76px); font-weight: 600; line-height: .96; letter-spacing: -.035em; }
+  h1 span { color: var(--accent); }
+  @media (min-width: 861px) { h1 span { white-space: nowrap; } h1 { font-size: clamp(44px, 5.4vw, 72px); } }
+  .lede { max-width: 42ch; margin: 0 0 34px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+  .download { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; }
+  .button {
+    display: inline-flex; align-items: center; gap: 12px; border-radius: 11px; padding: 17px 24px;
+    background: var(--accent); color: var(--surface); text-decoration: none;
+    font: 600 12px var(--mono); letter-spacing: .12em; transition: background .15s;
+  }
+  .button:hover { background: var(--cream); }
+  .button svg { width: 16px; height: 16px; flex: none; }
+  .meta { color: var(--faint); font: 500 11px/1.7 var(--mono); letter-spacing: .08em; }
+  .others { margin: 18px 0 0; color: var(--faint); font: 500 11px var(--mono); letter-spacing: .1em; }
+  .others a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line); }
+  .others a:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* The pitch chart */
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 16px; padding: 22px 22px 16px; background: var(--raised); }
+  .figure-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; font: 600 10px var(--mono); letter-spacing: .18em; }
+  .legend { display: flex; gap: 18px; color: var(--faint); }
+  .legend i { display: inline-block; width: 16px; height: 2px; margin-right: 7px; vertical-align: middle; }
+  .chart { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart .grid line { stroke: #2e3335; stroke-width: 1.5; }
+  .chart .grid text { fill: var(--faint); font: 500 19px var(--mono); }
+  .chart .ref { fill: none; stroke: var(--text); stroke-width: 7; opacity: .9; stroke-linecap: round; stroke-linejoin: round; }
+  .chart .mine { fill: none; stroke: var(--mine); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+  .chart .band { fill: rgba(217, 153, 46, .1); }
+  .chart .tick { stroke: var(--mine); stroke-width: 2.5; }
+  .chart .note { fill: var(--accent); font: 600 26px var(--mono); }
+  .chart .note-faint { fill: var(--faint); font: 600 15px var(--mono); letter-spacing: .14em; }
+  figcaption { margin-top: 10px; color: var(--faint); font-size: 13px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .chart .mine { stroke-dasharray: 1600; stroke-dashoffset: 1600; animation: draw 2.6s .3s cubic-bezier(.4, 0, .2, 1) forwards; }
+    .chart .late { opacity: 0; animation: fade .6s 2.4s forwards; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @keyframes fade { to { opacity: 1; } }
+  }
+
+  /* Facts */
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--line); }
+  .facts div { padding: 30px 28px 30px 0; }
+  .facts div + div { padding-left: 28px; border-left: 1px solid var(--line); }
+  .facts strong { display: block; margin-bottom: 6px; color: var(--cream); font-size: 19px; font-weight: 600; letter-spacing: -.02em; }
+  .facts p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  /* Workflow */
+  section { padding-block: clamp(64px, 9vw, 104px); }
+  h2 { max-width: 20ch; margin: 0 0 44px; color: var(--cream); font-size: clamp(30px, 4vw, 44px); font-weight: 600; line-height: 1.05; letter-spacing: -.03em; }
+  .steps { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+  .steps li { display: grid; grid-template-columns: 70px minmax(0, 220px) minmax(0, 1fr); gap: 8px 24px; padding: 26px 0; border-bottom: 1px solid var(--line); }
+  .steps span { color: var(--accent); font: 600 12px/1.9 var(--mono); letter-spacing: .14em; }
+  .steps h3 { margin: 0; color: var(--cream); font-size: 20px; font-weight: 600; letter-spacing: -.02em; }
+  .steps p { max-width: 62ch; margin: 0; color: var(--muted); }
+
+  /* Install */
+  .install { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .card { border: 1px solid var(--line); border-radius: 14px; padding: 26px 26px 22px; background: var(--raised); }
+  .card.here { border-color: var(--accent); }
+  .card h3 { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 4px; color: var(--cream); font-size: 20px; font-weight: 600; }
+  .card h3 small { color: var(--accent); font: 600 10px/2.4 var(--mono); letter-spacing: .16em; visibility: hidden; }
+  .card.here h3 small { visibility: visible; }
+  .card .req { margin: 0 0 18px; color: var(--faint); font: 500 11px var(--mono); letter-spacing: .06em; }
+  .card ol { margin: 0 0 20px; padding-left: 20px; color: var(--muted); font-size: 15px; }
+  .card li + li { margin-top: 6px; }
+  .card li::marker { color: var(--faint); font: 500 12px var(--mono); }
+  .card em { color: var(--text); font-style: normal; font-weight: 500; }
+  .card a.get { color: var(--accent); font: 600 11px var(--mono); letter-spacing: .12em; text-decoration: none; }
+  .card a.get:hover { color: var(--cream); }
+  .aside { margin-top: 22px; color: var(--faint); font-size: 14px; }
+  .aside a { color: var(--muted); }
+
+  footer { border-top: 1px solid var(--line); }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-block: 28px 40px; color: var(--faint); font: 500 11px var(--mono); letter-spacing: .1em; }
+  footer a { text-decoration: none; }
+  footer a:hover { color: var(--accent); }
+
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: minmax(0, 1fr); }
+    .facts, .install { grid-template-columns: minmax(0, 1fr); }
+    .facts div, .facts div + div { padding: 22px 0; border-left: 0; }
+    .facts div + div { border-top: 1px solid var(--line); }
+    .steps li { grid-template-columns: 52px minmax(0, 1fr); }
+    .steps p { grid-column: 2; }
+  }
+  @media (max-width: 480px) {
+    .nav a.optional { display: none; }
+    header img { height: 28px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a href="./" aria-label="Vocalika home"><img src="brand/lockup.svg" alt="Vocalika · Vocal Training" width="141" height="34" /></a>
+    <nav class="nav">
+      <a class="optional" href="#how">HOW IT WORKS</a>
+      <a class="optional" href="#install">INSTALL</a>
+      <a href="https://github.com/gonzalocasas/vocalika">GITHUB</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <p class="eyebrow"><b>●</b>&nbsp; Free · open source · private</p>
+      <h1>Sing it.<br />Measure it.<br /><span>Close the gap.</span></h1>
+      <p class="lede">Vocal training against the songs you actually want to sing: pitch and timing feedback in cents and milliseconds, not stars and applause.</p>
+      <div class="download">
+        <a class="button" id="primary" href="https://github.com/gonzalocasas/vocalika/releases/latest">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v9M3.8 6.6 8 10.8l4.2-4.2M2 14.5h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="primary-label">DOWNLOAD</span>
+        </a>
+        <span class="meta" id="primary-meta">macOS (Apple Silicon) · Windows</span>
+      </div>
+      <p class="others" id="others">
+        Also: <a data-get="mac" href="https://github.com/gonzalocasas/vocalika/releases/latest/download/Vocalika-macOS-AppleSilicon.dmg">macOS</a> ·
+        <a data-get="windows" href="https://github.com/gonzalocasas/vocalika/releases/latest/download/Vocalika-Windows-x64-setup.exe">Windows</a> ·
+        <a href="https://github.com/gonzalocasas/vocalika#getting-started">source</a>
+      </p>
+    </div>
+
+    <figure>
+      <div class="figure-head">
+        <span class="legend"><span><i style="background:var(--text)"></i>REFERENCE</span><span><i style="background:var(--mine)"></i>YOU</span></span>
+        <span style="color:var(--faint)">PITCH · CENTS</span>
+      </div>
+      <svg class="chart" viewBox="0 0 1000 440" role="img" aria-label="Your pitch drawn over the original singer's: the long held E is 31 cents flat, and one entry is 42 milliseconds late.">
+        <g class="grid">
+          <line x1="60" x2="1000" y1="128.1" y2="128.1" /><text x="0" y="134.1">E4</text>
+          <line x1="60" x2="1000" y1="205.6" y2="205.6" /><text x="0" y="211.6">D4</text>
+          <line x1="60" x2="1000" y1="283.1" y2="283.1" /><text x="0" y="289.1">C4</text>
+          <line x1="60" x2="1000" y1="321.9" y2="321.9" /><text x="0" y="327.9">B3</text>
+        </g>
+        <rect class="band" x="430" y="128.1" width="120" height="12.0" />
+        <path class="ref" d="M70.0 283.1 L73.0 283.1 L76.0 283.1 L79.0 283.1 L82.0 283.1 L85.0 283.1 L88.0 283.1 L91.0 283.1 L94.0 283.1 L97.0 283.1 L100.0 283.1 L103.0 283.1 L106.0 283.1 L109.0 283.1 L112.0 283.1 L115.0 283.1 L118.0 283.1 L121.0 283.1 L124.0 283.1 L127.0 283.1 L130.0 283.1 L133.0 283.1 L136.0 283.1 L139.0 283.1 L142.0 283.1 L145.0 283.1 L148.0 283.1 M165.0 205.6 L168.0 205.6 L171.0 205.6 L174.0 205.6 L177.0 205.6 L180.0 205.6 L183.0 205.6 L186.0 205.6 L189.0 205.6 L192.0 205.6 L195.0 205.6 L198.0 205.6 L201.0 205.6 L204.0 205.6 L207.0 205.6 L210.0 205.6 L213.0 205.6 L216.0 205.6 L219.0 205.6 L222.0 205.6 L225.0 205.6 L228.0 205.6 L231.0 205.6 L234.0 205.6 L237.0 205.6 L240.0 205.6 L243.0 205.6 L246.0 205.6 L249.0 205.6 L252.0 205.6 L255.0 205.6 L258.0 205.6 L261.0 205.6 L264.0 205.6 M280.0 128.1 L283.0 128.1 L286.0 128.1 L289.0 128.1 L292.0 128.1 L295.0 128.1 L298.0 128.1 L301.0 128.1 L304.0 128.1 L307.0 128.1 L310.0 128.1 L313.0 128.1 L316.0 128.1 L319.0 128.1 L322.0 128.2 L325.0 128.3 L328.0 128.0 L331.0 127.6 L334.0 127.1 L337.0 126.6 L340.0 126.3 L343.0 126.3 L346.0 126.7 L349.0 127.5 L352.0 128.6 L355.0 129.9 L358.0 131.1 L361.0 131.9 L364.0 132.1 L367.0 131.7 L370.0 130.6 L373.0 128.9 L376.0 127.0 L379.0 125.4 L382.0 124.1 L385.0 123.5 L388.0 123.6 L391.0 124.5 L394.0 125.9 L397.0 127.6 L400.0 129.5 L403.0 131.1 L406.0 132.3 L409.0 132.8 L412.0 132.5 L415.0 131.6 L418.0 130.1 L421.0 128.4 L424.0 126.5 L427.0 125.0 L430.0 123.9 L433.0 123.5 L436.0 123.8 L439.0 124.8 L442.0 126.4 L445.0 128.2 L448.0 130.0 L451.0 131.5 L454.0 132.5 L457.0 132.8 L460.0 132.3 L463.0 131.2 L466.0 129.6 L469.0 127.8 L472.0 126.0 L475.0 124.6 L478.0 123.7 L481.0 123.5 L484.0 124.0 L487.0 125.2 L490.0 126.9 L493.0 128.7 L496.0 130.5 L499.0 131.8 L502.0 132.6 L505.0 132.7 L508.0 132.1 L511.0 130.8 L514.0 129.1 L517.0 127.3 L520.0 125.6 L523.0 124.3 L526.0 123.6 L529.0 123.6 L532.0 124.3 L535.0 125.7 L538.0 127.4 L541.0 129.2 L544.0 130.9 L547.0 132.1 L550.0 132.7 L553.0 132.6 L556.0 131.8 L559.0 130.4 M575.0 205.6 L578.0 205.6 L581.0 205.6 L584.0 205.6 L587.0 205.6 L590.0 205.6 L593.0 205.6 L596.0 205.6 L599.0 205.6 L602.0 205.6 L605.0 205.6 L608.0 205.6 L611.0 205.6 L614.0 205.6 L617.0 205.6 L620.0 205.6 L623.0 205.6 L626.0 205.6 L629.0 205.6 L632.0 205.6 L635.0 205.6 L638.0 205.6 M655.0 283.1 L658.0 283.1 L661.0 283.1 L664.0 283.1 L667.0 283.1 L670.0 283.1 L673.0 283.1 L676.0 283.1 L679.0 283.1 L682.0 283.1 L685.0 283.1 L688.0 283.1 L691.0 283.1 L694.0 283.1 L697.0 283.1 L700.0 283.1 L703.0 283.1 L706.0 283.1 L709.0 283.1 L712.0 283.1 L715.0 283.1 L718.0 283.1 L721.0 283.1 L724.0 283.1 L727.0 283.1 L730.0 283.1 L733.0 283.1 L736.0 283.1 L739.0 283.1 L742.0 283.1 L745.0 283.1 M760.0 321.9 L763.0 321.9 L766.0 321.9 L769.0 321.9 L772.0 321.9 L775.0 321.9 L778.0 321.9 L781.0 321.9 L784.0 321.9 L787.0 321.9 L790.0 321.9 L793.0 321.9 L796.0 321.9 L799.0 321.9 L802.0 322.0 L805.0 322.0 L808.0 321.8 L811.0 321.4 L814.0 320.8 L817.0 320.3 L820.0 320.0 L823.0 320.0 L826.0 320.5 L829.0 321.3 L832.0 322.4 L835.0 323.6 L838.0 324.8 L841.0 325.6 L844.0 325.9 L847.0 325.5 L850.0 324.4 L853.0 322.6 L856.0 320.8 L859.0 319.1 L862.0 317.9 L865.0 317.3 L868.0 317.4 L871.0 318.2 L874.0 319.6 L877.0 321.4 L880.0 323.2 L883.0 324.8 L886.0 326.0 L889.0 326.5 L892.0 326.3 L895.0 325.4 L898.0 323.9 L901.0 322.1 L904.0 320.3 L907.0 318.7 L910.0 317.6 L913.0 317.2 L916.0 317.6 L919.0 318.6 L922.0 320.1 L925.0 321.9 L928.0 323.7 L931.0 325.2 L934.0 326.2 L937.0 326.5 L940.0 326.1 L943.0 325.0 L946.0 323.4 L949.0 321.6 L952.0 319.8 L955.0 318.3 L958.0 317.4 L961.0 317.2 L964.0 317.8 L967.0 319.0 L970.0 320.6" />
+        <path class="mine" d="M84.0 318.0 L87.0 308.1 L90.0 301.0 L93.0 296.0 L96.0 292.3 L99.0 289.7 L102.0 287.8 L105.0 286.5 L108.0 285.5 L111.0 284.9 L114.0 284.4 L117.0 284.0 L120.0 283.8 L123.0 283.6 L126.0 283.5 L129.0 283.4 L132.0 283.3 L135.0 283.2 L138.0 283.2 L141.0 283.2 L144.0 283.2 L147.0 283.0 L150.0 282.9 M174.0 240.5 L177.0 230.6 L180.0 223.5 L183.0 218.5 L186.0 214.8 L189.0 212.2 L192.0 210.3 L195.0 209.0 L198.0 208.0 L201.0 207.4 L204.0 206.9 L207.0 206.5 L210.0 206.3 L213.0 206.1 L216.0 206.0 L219.0 205.9 L222.0 205.8 L225.0 205.7 L228.0 205.7 L231.0 205.7 L234.0 205.7 L237.0 205.5 L240.0 205.4 L243.0 205.3 L246.0 205.2 L249.0 205.1 L252.0 204.9 L255.0 204.8 L258.0 204.7 L261.0 204.6 L264.0 204.5 M298.0 163.0 L301.0 153.1 L304.0 146.0 L307.0 141.0 L310.0 137.3 L313.0 134.7 L316.0 132.8 L319.0 131.5 L322.0 130.5 L325.0 129.9 L328.0 129.4 L331.0 129.0 L334.0 128.8 L337.0 128.6 L340.0 128.5 L343.0 128.4 L346.0 128.3 L349.0 128.1 L352.0 128.0 L355.0 128.1 L358.0 128.7 L361.0 130.3 L364.0 131.9 L367.0 133.3 L370.0 134.1 L373.0 134.3 L376.0 133.9 L379.0 133.1 L382.0 132.2 L385.0 131.7 L388.0 132.0 L391.0 133.3 L394.0 135.6 L397.0 138.9 L400.0 142.1 L403.0 144.9 L406.0 147.0 L409.0 147.9 L412.0 147.0 L415.0 144.8 L418.0 141.7 L421.0 138.3 L424.0 135.3 L427.0 133.2 L430.0 132.4 L433.0 133.1 L436.0 135.2 L439.0 138.2 L442.0 141.6 L445.0 144.7 L448.0 146.9 L451.0 147.9 L454.0 147.3 L457.0 145.4 L460.0 142.5 L463.0 139.1 L466.0 135.9 L469.0 133.6 L472.0 132.4 L475.0 132.8 L478.0 134.6 L481.0 137.4 L484.0 140.7 L487.0 144.0 L490.0 146.5 L493.0 147.8 L496.0 147.6 L499.0 146.0 L502.0 142.7 L505.0 138.4 L508.0 134.2 L511.0 130.7 L514.0 128.4 L517.0 127.5 L520.0 128.0 L523.0 129.7 L526.0 132.1 L529.0 134.5 L532.0 136.4 L535.0 137.1 L538.0 136.4 L541.0 134.5 L544.0 132.0 L547.0 128.8 L550.0 125.4 L553.0 122.6 L556.0 120.8 L559.0 120.4 M581.0 240.5 L584.0 230.6 L587.0 223.5 L590.0 218.5 L593.0 214.8 L596.0 212.2 L599.0 210.3 L602.0 209.0 L605.0 208.0 L608.0 207.4 L611.0 206.9 L614.0 206.5 L617.0 206.3 L620.0 206.1 L623.0 206.0 L626.0 205.9 L629.0 205.8 L632.0 205.7 L635.0 205.7 L638.0 205.7 M666.0 318.0 L669.0 308.1 L672.0 301.0 L675.0 296.0 L678.0 292.3 L681.0 289.7 L684.0 287.8 L687.0 286.5 L690.0 285.5 L693.0 284.9 L696.0 284.4 L699.0 284.0 L702.0 283.8 L705.0 283.6 L708.0 283.5 L711.0 283.4 L714.0 283.3 L717.0 283.2 L720.0 283.2 L723.0 283.2 L726.0 283.2 L729.0 283.0 L732.0 282.9 L735.0 282.8 L738.0 282.7 L741.0 282.6 L744.0 282.4 M776.0 356.7 L779.0 346.9 L782.0 339.8 L785.0 334.7 L788.0 331.1 L791.0 328.5 L794.0 326.6 L797.0 325.3 L800.0 324.3 L803.0 323.6 L806.0 323.1 L809.0 322.8 L812.0 322.5 L815.0 322.3 L818.0 322.2 L821.0 322.1 L824.0 322.0 L827.0 321.9 L830.0 321.7 L833.0 321.9 L836.0 322.4 L839.0 323.4 L842.0 324.3 L845.0 325.0 L848.0 325.2 L851.0 324.7 L854.0 323.6 L857.0 322.2 L860.0 320.6 L863.0 319.5 L866.0 319.1 L869.0 319.7 L872.0 321.4 L875.0 324.0 L878.0 326.9 L881.0 329.7 L884.0 331.9 L887.0 332.7 L890.0 331.8 L893.0 329.6 L896.0 326.5 L899.0 323.1 L902.0 320.1 L905.0 318.0 L908.0 317.2 L911.0 317.9 L914.0 320.0 L917.0 323.0 L920.0 326.4 L923.0 329.5 L926.0 331.8 L929.0 332.7 L932.0 332.2 L935.0 330.3 L938.0 327.3 L941.0 324.0 L944.0 320.8 L947.0 318.4 L950.0 317.3 L953.0 317.6 L956.0 319.4 L959.0 322.2 L962.0 325.6 L965.0 328.8 L968.0 331.3" />
+        <g class="late">
+          <line class="tick" x1="490" x2="490" y1="102.1" y2="149.1" />
+          <text class="note" x="490" y="94.1" text-anchor="middle">−31 ¢</text>
+          <text class="note-faint" x="490" y="64.1" text-anchor="middle">HELD FLAT</text>
+          <line class="tick" x1="800" x2="816" y1="343.9" y2="343.9" />
+          <text class="note" x="808" y="375.9" text-anchor="middle">+42 ms</text>
+          <text class="note-faint" x="808" y="397.9" text-anchor="middle">LATE ENTRY</text>
+        </g>
+      </svg>
+      <figcaption>Your take laid over the original, frame by frame and note by note.</figcaption>
+    </figure>
+  </div>
+
+  <div class="wrap">
+    <div class="facts">
+      <div><strong>Any song</strong><p>A file on your computer or a YouTube link. The voice is pulled out of the mix and becomes your reference.</p></div>
+      <div><strong>Exact feedback</strong><p>Where you went flat, where you rushed, and by how much: in cents and milliseconds.</p></div>
+      <div><strong>Stays on your machine</strong><p>Everything runs on your own computer. Your recordings never leave it.</p></div>
+    </div>
+  </div>
+
+  <section id="how">
+    <div class="wrap">
+      <p class="eyebrow">How it works</p>
+      <h2>One song, five steps, from first listen to finished mix.</h2>
+      <ol class="steps">
+        <li><span>01</span><h3>Reference</h3><p>Listen to the isolated vocal, the instrumental, or both with the voice turned down. Trim to the part you are working on and transpose it into your key. Lyrics are found for you and light up word by word as the song plays.</p></li>
+        <li><span>02</span><h3>Practice</h3><p>Exercises drawn from the song itself, its range, its long held notes and its leaps, played on a grand piano and scored as you sing them.</p></li>
+        <li><span>03</span><h3>Takes</h3><p>Record with the lyrics following along and a live pitch line tracing your voice against the original. Or bring a take recorded elsewhere, even a full mix with instruments.</p></li>
+        <li><span>04</span><h3>Compare</h3><p>Your pitch over the original, in cents, with note names alongside. Held notes are measured on their centre, so a scoop into a note is not mistaken for singing it out of tune.</p></li>
+        <li><span>05</span><h3>Export</h3><p>Your take placed on the original timeline and mixed with the instrumental at the level you choose, as MP3, WAV or FLAC.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="install" style="padding-top:0">
+    <div class="wrap">
+      <p class="eyebrow">Install</p>
+      <h2>Download, open, and let it set itself up once.</h2>
+      <div class="install">
+        <article class="card" id="card-mac">
+          <h3>macOS <small>YOUR SYSTEM</small></h3>
+          <p class="req">APPLE SILICON (M1 OR LATER) · 16 GB MEMORY RECOMMENDED</p>
+          <ol>
+            <li>Open the downloaded <em>.dmg</em> and drag Vocalika into Applications.</li>
+            <li>Open Vocalika. macOS says it cannot verify the developer: click <em>Done</em>.</li>
+            <li>In <em>System Settings → Privacy &amp; Security</em>, click <em>Open Anyway</em>. You only do this once.</li>
+            <li>Allow the microphone when asked.</li>
+          </ol>
+          <a class="get" data-get="mac" href="https://github.com/gonzalocasas/vocalika/releases/latest/download/Vocalika-macOS-AppleSilicon.dmg">DOWNLOAD FOR MACOS →</a>
+        </article>
+        <article class="card" id="card-windows">
+          <h3>Windows <small>YOUR SYSTEM</small></h3>
+          <p class="req">WINDOWS 10 OR 11, 64-BIT · 16 GB MEMORY RECOMMENDED</p>
+          <ol>
+            <li>Run the downloaded <em>setup.exe</em>.</li>
+            <li>If Windows says it protected your PC, click <em>More info</em>, then <em>Run anyway</em>.</li>
+            <li>Follow the installer, then open Vocalika from the Start menu.</li>
+          </ol>
+          <a class="get" data-get="windows" href="https://github.com/gonzalocasas/vocalika/releases/latest/download/Vocalika-Windows-x64-setup.exe">DOWNLOAD FOR WINDOWS →</a>
+        </article>
+      </div>
+      <p class="aside">
+        The first start downloads the audio and machine-learning components, about 1.8 GB, and takes a few minutes; after that Vocalika starts in seconds and works offline, apart from fetching songs from YouTube. It needs about 3.5 GB of disk.
+        The app is not yet signed by Apple or Microsoft, which is why the steps above are needed.
+        On Linux, or to hack on it, <a href="https://github.com/gonzalocasas/vocalika#getting-started">run it from source</a>.
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>VOCALIKA · MIT LICENSE</span>
+    <span><a href="https://github.com/gonzalocasas/vocalika">SOURCE</a> · <a href="https://github.com/gonzalocasas/vocalika/releases">RELEASES</a> · <a href="https://github.com/gonzalocasas/vocalika/issues">REPORT AN ISSUE</a></span>
+  </div>
+</footer>
+
+<script>
+  // Works without this script: the links fall back to the latest release.
+  // With it, the main button offers the build for this computer, and the
+  // version and size come from the latest release.
+  (() => {
+    const REPO = "gonzalocasas/vocalika"
+    const ua = navigator.userAgent
+    const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || ""
+    const touchMac = /Mac/.test(platform) && navigator.maxTouchPoints > 1 // iPadOS reports as a Mac
+    const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || touchMac
+    const os = mobile ? "mobile" : /Mac/i.test(platform) ? "mac" : /Win/i.test(platform) ? "windows" : "other"
+
+    const $ = (id) => document.getElementById(id)
+    const NAMES = { mac: "macOS", windows: "Windows" }
+    const ICON = '<path d="M8 1.5v9M3.8 6.6 8 10.8l4.2-4.2M2 14.5h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
+    const CODE = '<path d="M5.5 4 1.5 8l4 4M10.5 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
+    const link = (key) => document.querySelector(`[data-get="${key}"]`).href
+
+    function primary() {
+      const button = $("primary")
+      if (os === "mac" || os === "windows") {
+        button.href = link(os)
+        $("primary-label").textContent = `DOWNLOAD FOR ${NAMES[os].toUpperCase()}`
+        $("primary-meta").textContent = os === "mac" ? "Apple Silicon (M1 or later)" : "Windows 10 or 11, 64-bit"
+        $("card-" + os).classList.add("here")
+        const other = os === "mac" ? "windows" : "mac"
+        $("others").innerHTML = `Also for <a href="${link(other)}">${NAMES[other]}</a> · <a href="https://github.com/${REPO}#getting-started">source</a>`
+      } else {
+        button.href = `https://github.com/${REPO}#getting-started`
+        button.querySelector("svg").innerHTML = CODE
+        $("primary-label").textContent = "GET THE SOURCE"
+        $("primary-meta").textContent = mobile ? "Vocalika is a desktop app for macOS and Windows" : "Desktop builds for macOS and Windows; elsewhere, run from source"
+      }
+    }
+    primary()
+
+    // The release's own asset links and sizes, when GitHub answers.
+    fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
+      .then((response) => response.ok ? response.json() : Promise.reject(response.status))
+      .then((release) => {
+        const find = { mac: /\.dmg$/i, windows: /setup\.exe$/i }
+        const sizes = {}
+        for (const key of Object.keys(find)) {
+          const asset = release.assets.find((item) => find[key].test(item.name))
+          if (!asset) continue
+          sizes[key] = Math.round(asset.size / 1e6)
+          document.querySelectorAll(`[data-get="${key}"]`).forEach((a) => { a.href = asset.browser_download_url })
+        }
+        primary()
+        if (sizes[os]) $("primary-meta").textContent += ` · ${release.tag_name} · ${sizes[os]} MB`
+      })
+      .catch(() => {})
+  })()
+</script>
+</body>
+</html>

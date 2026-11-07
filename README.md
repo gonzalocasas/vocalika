@@ -4,6 +4,8 @@
 
 <p align="center"><strong>Sing it. Measure it. Close the gap.</strong></p>
 
+<p align="center"><a href="https://gonzalocasas.github.io/vocalika/"><strong>Download for macOS and Windows →</strong></a></p>
+
 <p align="center">
   Vocal training against the songs you actually want to sing —<br />
   pitch and timing feedback in cents and milliseconds, not stars and applause.
