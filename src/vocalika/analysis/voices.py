@@ -120,6 +120,7 @@ def separate_two_voices(
     audio: FloatAudio,
     sample_rate: int,
     hop_length: int,
+    residual: FloatAudio | None = None,
     minimum_seconds: float = 0.15,
     maximum_level_gap_db: float = 20.0,
     minimum_confidence: float = 0.2,
@@ -133,6 +134,17 @@ def separate_two_voices(
     more than a semitone from the first and off its octave, it is no more
     than ``maximum_level_gap_db`` below it, and it holds for at least
     ``minimum_seconds``.
+
+    The second voice's level is measured in ``residual`` -- what was left
+    after cancelling the first -- when it is given. A phantom found there
+    often sits where its partials fall on the first voice's (a fifth above
+    a bass shares every other one), so in the original audio it borrows the
+    first voice's energy and passes the level test; in the residual those
+    partials are gone. A real second singer keeps most of its partials
+    through the cancellation. On the Choral Singing Dataset this took the
+    worst solo bass from 40 cents mean error to 20, and the 47 solo tracks
+    from 97.45% of frames within 50 cents to 97.6%, without moving any
+    harmony mix by more than 0.2 points.
 
     Confidence does most of the work. On the benchmark, residue found in
     solo recordings mixed into a band and separated had a median confidence
@@ -157,7 +169,10 @@ def separate_two_voices(
     # both are present; elsewhere it would be -inf - -inf.
     first_level = harmonic_level_db(audio, first, sample_rate, hop_length)
     second_level = harmonic_level_db(
-        audio, np.where(distinct, second, 0.0), sample_rate, hop_length
+        audio if residual is None else residual,
+        np.where(distinct, second, 0.0),
+        sample_rate,
+        hop_length,
     )
     distinct[distinct] = first_level[distinct] - second_level[distinct] <= maximum_level_gap_db
     distinct = _drop_short_runs(distinct, max(1, round(minimum_seconds * sample_rate / hop_length)))

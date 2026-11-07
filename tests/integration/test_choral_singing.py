@@ -168,15 +168,17 @@ def test_second_voice_search_costs_little_on_a_solo_voice(
 ) -> None:
     """The reference path searches for a second voice; on a solo it must find none.
 
-    It is not free: on low voices it occasionally takes a harmonic for a
-    second singer. The worst case measured, ND bass 1, lost 3 points of
-    frames within 50 cents (0.968 to 0.939) and its mean error rose from 10
-    to 40 cents. This pins that cost so it cannot grow.
+    It is not quite free: on low voices it occasionally takes a phantom on
+    the voice's own partials for a second singer. The worst case measured,
+    ND bass 1, loses 1.7 points of frames within 50 cents (0.968 to 0.951)
+    and its mean error rises from 10 to 20 cents. That was 3 points and 40
+    cents before the second voice's level was measured in what cancelling
+    the first leaves behind. This pins the cost so it cannot grow again.
     """
     reference = _score(extract_clean(load_mono(_audio_path(*track))), *track)
     take = take_scores[track]
-    assert reference.within_50 > take.within_50 - 0.045
-    assert reference.within_50 > 0.92
+    assert reference.within_50 > take.within_50 - 0.03
+    assert reference.within_50 > 0.935
     assert reference.octave_errors < 0.005
 
 
@@ -451,7 +453,7 @@ def test_held_note_scores_match_the_hand_corrected_pitch(held_notes: list[dict[s
 
 @pytest.fixture(scope="module")
 def sung_intervals(tmp_path_factory: pytest.TempPathFactory) -> list[tuple[float, float]]:
-    """(reported, true) interval error in cents, for up to ten leaps per singer.
+    """(reported, true) interval error in cents, for every leap every singer sings.
 
     A leap is two consecutive notes of at least 0.6 s, at most 0.3 s apart,
     that land on different tempered notes.
@@ -461,12 +463,9 @@ def sung_intervals(tmp_path_factory: pytest.TempPathFactory) -> list[tuple[float
     results = []
     for piece, section, singer in TRACKS:
         notes = _section_notes(piece, section)
-        taken = 0
         for (start1, hz1, length1), (start2, hz2, length2) in zip(
             notes[:-1], notes[1:], strict=True
         ):
-            if taken == 10:
-                break
             if length1 < 0.6 or length2 < 0.6 or start2 - (start1 + length1) > 0.3:
                 continue
             from_midi, to_midi = (float(np.round(m)) for m in hz_to_midi(np.array([hz1, hz2])))
@@ -478,7 +477,6 @@ def sung_intervals(tmp_path_factory: pytest.TempPathFactory) -> list[tuple[float
             second = _annotated_centre(piece, section, singer, start2, start2 + length2, 0.2)
             sung = float(np.median(second)) - float(np.median(first))
             results.append((reported, 100.0 * (sung - (to_midi - from_midi))))
-            taken += 1
     return results
 
 
@@ -487,18 +485,17 @@ def test_interval_scores_match_the_hand_corrected_leap(
 ) -> None:
     """The practice score of a real sung leap, against the annotated one.
 
-    score_interval splits the attempt at the largest frame-to-frame pitch
-    move. A legato singer glides into the second note over many frames, so
-    a vibrato swing inside the first note can be the larger move and the
-    split lands in the wrong place, and a correctly sung leap is reported
-    hundreds of cents off. It is rare -- 3 of 401 leaps in a wider sample;
-    none of the 463 sampled here, where 98.9% land within 25 cents of the
-    truth -- and pinned so it cannot become common.
+    Measured over 1127 leaps: 4.4 cents from the annotated interval (median),
+    98.6% within 25 cents, and 3 more than 50 off -- two of them clips that
+    hold the tail of a third note or a long scoop rather than a clean leap.
+    Splitting at the largest frame-to-frame move instead, as score_interval
+    once did, put 14 more than 50 off: on a legato leap a vibrato swing can
+    be a larger move than the glide.
     """
-    assert len(sung_intervals) > 300
+    assert len(sung_intervals) > 1000
     assert all(reported is not None for reported, _ in sung_intervals)
     deviations = np.array([abs(reported - truth) for reported, truth in sung_intervals])
 
-    assert float(np.median(deviations)) < 6.5
-    assert float(np.mean(deviations <= 25.0)) > 0.97
-    assert float(np.mean(deviations > 100.0)) < 0.01
+    assert float(np.median(deviations)) < 6.0
+    assert float(np.mean(deviations <= 25.0)) > 0.98
+    assert int(np.sum(deviations > 50.0)) <= 6
