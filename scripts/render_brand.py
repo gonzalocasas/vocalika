@@ -88,6 +88,7 @@ def main() -> None:
     site.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(BRAND / "lockup.svg", site / "lockup.svg")
     shutil.copyfile(BRAND / "mark.svg", site / "favicon.svg")
+    shutil.copyfile(BRAND / "wordmark.svg", site / "wordmark.svg")
     render(master("app-icon"), site / "app-icon.png", 180)
     render(framed("lockup", 1200, 630, 940, INK), site / "social.png", 1200)
 
