@@ -14,6 +14,9 @@ SCHEMA_VERSION = "0.1.0"
 VOLATILE_KEYS = frozenset(
     {
         "created_at",
+        # Bumped by every release, analysis change or not; a change in the
+        # analysis shows up in the numbers, which is what goldens pin.
+        "pipeline_version",
         "provenance",
         "path",
         "analysis_audio",

@@ -1984,7 +1984,6 @@
       "title": "01_test_identical"
     }
   },
-  "pipeline_version": "0.1.0",
   "pitch": {
     "concert_pitch_hz": 440.0,
     "extractor": "rmvpe+second-voice-louder",

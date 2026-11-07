@@ -1,13 +1,14 @@
 # Open test datasets
 
-Vocalika uses two optional open datasets for regression coverage. Their large
+Vocalika uses three optional open datasets, all with human-verified
+annotations, for regression coverage. Their large
 archives and extracted files are not redistributed in this repository. They
 are pinned to immutable Zenodo records, checksum-verified when downloaded, and
 stored under the Git-ignored `tests/external-data/` directory.
 
 ## Fetching the data
 
-Fetch and extract both pinned records:
+Fetch and extract every pinned record:
 
 ```bash
 uv run python scripts/fetch_open_datasets.py
@@ -18,7 +19,10 @@ Fetch only one dataset:
 ```bash
 uv run python scripts/fetch_open_datasets.py vocadito
 uv run python scripts/fetch_open_datasets.py mast-melody
+uv run python scripts/fetch_open_datasets.py csd
 ```
+
+The Choral Singing Dataset is about 1.1 GB; the other two are 58 and 331 MB.
 
 The fetcher is idempotent, validates the exact byte size and MD5 checksum
 published by Zenodo, rejects unsafe ZIP paths, and expands MAST's nested audio,
@@ -43,15 +47,45 @@ accuracy regression; after an intended change, re-record it with
 `uv run python tests/integration/test_open_datasets.py`. Per-track bars key off
 the median cents error rather than the mean, because RMVPE errs by an octave
 on under 1% of frames in tracks 5, 6, 33, 34 and 40 -- pinned by its own test
-so it cannot spread silently. The MAST tests send published CREPE tracks through Vocalika's
+so it cannot spread silently. Further Vocadito tests check
+the practice layer against the two independent note transcriptions: the notes
+`segment_notes` offers for practice must be real notes at the transcribed
+pitch, about as often as the second annotator's are, and held notes both
+annotators agree on must get the score their annotated F0 implies.
+
+The MAST tests send published CREPE tracks through Vocalika's
 alignment and comparison layers. They include a targeted temporal-alignment
 regression and a dataset-wide benchmark covering all exactly paired
-performances unanimously rated either perfect or completely off.
+performances unanimously rated either perfect or completely off. The same
+benchmark runs again with every sung take measured by Vocalika's own take
+path; the piano references stay on the published track, because RMVPE is
+trained on singing and a Vocalika reference is always a voice.
+
+The Choral Singing Dataset tests (`tests/integration/test_choral_singing.py`)
+use its hand-corrected per-singer F0. They check, in turn:
+
+- the take path on all 16 singers, soprano to bass, track by track;
+- that the reference path's second-voice search costs little on a solo voice;
+- voice choice in harmony, built by mixing separately recorded sections: a
+  melody over or under a harmony, and equal-level duets with the voice set to
+  upper or lower;
+- the full pipeline on real reference/take pairs -- singers 2-4 of each
+  section against singer 1 -- whose reported bias, per-frame error and
+  per-note error must match the intonation difference the annotations show;
+- `score_held_note` and `score_interval` on real held notes and leaps.
+
+One published F0 file, `CSD_ND_tenor_3.f0`, is a near-copy of singer 2's and is
+left out; a guard test fails if a corrected release appears.
+
+All the open-data tests together take about ten minutes on a laptop CPU.
 
 ## Acknowledgements and licenses
 
-Both datasets are licensed under the [Creative Commons Attribution 4.0
-International license](https://creativecommons.org/licenses/by/4.0/). Vocalika
+Vocadito and MAST are licensed under the [Creative Commons Attribution 4.0
+International license](https://creativecommons.org/licenses/by/4.0/); the
+Choral Singing Dataset under [Creative Commons Attribution-NonCommercial
+4.0](https://creativecommons.org/licenses/by-nc/4.0/), which permits this use
+but rules out shipping it in anything sold. Vocalika
 does not redistribute the downloaded records, and the fetched source files are
 left unchanged. During the Vocadito tests each track is resampled in full to
 16 kHz to match Vocalika's analysis format; the MAST CREPE F0 arrays are read as
@@ -91,3 +125,16 @@ dataset:
 > Bozkurt, B., Baysal, O., and Yuret, D. (2017). A Dataset and Baseline System
 > for Singing Voice Assessment. *13th International Symposium on Computer
 > Music Multidisciplinary Research (CMMR 2017)*, Porto, September 25–28, 2017.
+
+### Choral Singing Dataset
+
+Helena Cuesta, Emilia Gómez, Agustín Martorell, and Felipe Loáiciga (2018),
+*Analysis of Intonation in Unison Choir Singing*. 15th International
+Conference on Music Perception and Cognition (ICMPC). Zenodo. DOI:
+[10.5281/zenodo.2649950](https://doi.org/10.5281/zenodo.2649950).
+
+Vocalika gratefully acknowledges the singers of the Anton Bruckner Choir of
+Barcelona and the dataset's creators. The pinned record contains three SATB
+pieces sung by four singers per section, each on an individual microphone,
+with hand-corrected F0 for every singer and note annotations for every
+section.

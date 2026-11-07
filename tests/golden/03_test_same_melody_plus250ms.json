@@ -2162,7 +2162,6 @@
       "title": "03_test_same_melody_plus250ms"
     }
   },
-  "pipeline_version": "0.1.0",
   "pitch": {
     "concert_pitch_hz": 440.0,
     "extractor": "rmvpe+second-voice-louder",
