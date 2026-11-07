@@ -205,18 +205,18 @@
       </svg>
     </button>
     <img class="wordmark" src="brand/wordmark.svg" alt="" width="300" height="35" />
-    <p class="lede">Sing the songs you love, and see exactly where your pitch and timing drift.</p>
+    <p class="lede">Sing the songs you love, and visualize your pitch and timing drift.</p>
     <div class="download">
       <a class="button" id="primary" href="https://github.com/gonzalocasas/vocalika/releases/latest">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v9M3.8 6.6 8 10.8l4.2-4.2M2 14.5h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span id="primary-label">DOWNLOAD</span>
       </a>
-      <span class="meta" id="primary-meta">macOS (Apple Silicon) · Windows</span>
+      <span class="meta" id="primary-meta">For macOS (Apple Silicon) and Windows</span>
     </div>
     <p class="others" id="others">
-      Also: <a data-get="mac" href="https://github.com/gonzalocasas/vocalika/releases/latest/download/Vocalika-macOS-AppleSilicon.dmg">macOS</a> ·
-      <a data-get="windows" href="https://github.com/gonzalocasas/vocalika/releases/latest/download/Vocalika-Windows-x64-setup.exe">Windows</a> ·
-      <a href="https://github.com/gonzalocasas/vocalika#getting-started">source</a>
+      Get it for <a data-get="mac" href="https://github.com/gonzalocasas/vocalika/releases/latest/download/Vocalika-macOS-AppleSilicon.dmg">macOS</a> or
+      <a data-get="windows" href="https://github.com/gonzalocasas/vocalika/releases/latest/download/Vocalika-Windows-x64-setup.exe">Windows</a>, or
+      <a href="https://github.com/gonzalocasas/vocalika#getting-started">get the source</a>
     </p>
   </div>
 
@@ -365,7 +365,7 @@
         $("primary-meta").textContent = os === "mac" ? "Apple Silicon (M1 or later)" : "Windows 10 or 11, 64-bit"
         $("card-" + os).classList.add("here")
         const other = os === "mac" ? "windows" : "mac"
-        $("others").innerHTML = `Also for <a href="${link(other)}">${NAMES[other]}</a> · <a href="https://github.com/${REPO}#getting-started">source</a>`
+        $("others").innerHTML = `Also for <a href="${link(other)}">${NAMES[other]}</a>, or <a href="https://github.com/${REPO}#getting-started">get the source</a>`
       } else {
         button.href = `https://github.com/${REPO}#getting-started`
         button.querySelector("svg").innerHTML = CODE
@@ -388,7 +388,7 @@
           document.querySelectorAll(`[data-get="${key}"]`).forEach((a) => { a.href = asset.browser_download_url })
         }
         primary()
-        if (sizes[os]) $("primary-meta").textContent += ` · ${release.tag_name} · ${sizes[os]} MB`
+        if (sizes[os]) $("primary-meta").textContent += `, ${release.tag_name}, ${sizes[os]} MB`
       })
       .catch(() => {})
   })()
