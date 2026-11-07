@@ -32,7 +32,10 @@ EXE = ".exe" if sys.platform == "win32" else ""
 
 def run(*command: str, cwd: Path = REPOSITORY) -> None:
     print("+", " ".join(command), flush=True)
-    subprocess.run(command, cwd=cwd, check=True)
+    # Resolve the program first: on Windows npm is npm.cmd, which
+    # CreateProcess does not find by its bare name.
+    program = shutil.which(command[0]) or command[0]
+    subprocess.run([program, *command[1:]], cwd=cwd, check=True)
 
 
 def which(name: str, override_variable: str) -> Path:
