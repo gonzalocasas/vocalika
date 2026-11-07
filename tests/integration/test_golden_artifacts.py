@@ -36,13 +36,19 @@ ABSOLUTE_TOLERANCE = 1e-12
 # everything computed from them follows. These bounds sit about five times
 # above the worst drift measured between macOS arm64 and Linux x86-64
 # (pitch 0.0006 semitones, cents 0.09, confidence 0.001; one frame of 150
-# crossing a percentage threshold). Everything discrete stays strict --
-# which frames are voiced and valid, every stable region's boundaries, the
-# chosen offset and how it was chosen -- so a real change still fails.
+# crossing a percentage threshold). Frame pairing can also break a near-tie
+# at a note onset the other way, pairing a frame with its neighbour: one
+# 20 ms step, and that neighbour's confidence, which can differ by 0.01.
+# Everything else discrete stays strict -- which frames are voiced and
+# valid, every stable region's boundaries, the chosen offset and how it was
+# chosen -- so a real change still fails.
+FRAME_STEP_SECONDS = 0.02
 PATH_TOLERANCES: dict[str, float] = {
-    "comparison.frames.confidence": 5e-3,
-    "comparison.frames.performance_confidence": 5e-3,
-    "comparison.frames.reference_confidence": 5e-3,
+    "comparison.frames.reference_time": FRAME_STEP_SECONDS + 1e-9,
+    "comparison.frames.performance_time": FRAME_STEP_SECONDS + 1e-9,
+    "comparison.frames.confidence": 0.02,
+    "comparison.frames.performance_confidence": 0.02,
+    "comparison.frames.reference_confidence": 0.02,
     "comparison.frames.performance_midi": 3e-3,
     "comparison.frames.reference_midi": 3e-3,
     "comparison.frames.absolute_error_cents": 0.5,
