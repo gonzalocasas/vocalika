@@ -50,16 +50,27 @@
   .eyebrow b { color: var(--accent); font-weight: 600; }
 
   /* Header */
-  header { }
+  header {
+    position: sticky; top: 0; z-index: 10; padding-top: env(safe-area-inset-top, 0px);
+    background: rgba(23, 26, 28, .68); border-bottom: 1px solid transparent;
+    -webkit-backdrop-filter: blur(16px) saturate(150%); backdrop-filter: blur(16px) saturate(150%);
+    transition: border-color .25s;
+  }
+  header.scrolled { border-bottom-color: rgba(51, 56, 58, .8); }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { header { background: rgba(23, 26, 28, .96); } }
+  .home { display: block; margin-right: auto; opacity: 0; transform: translateY(4px); pointer-events: none; transition: opacity .3s, transform .3s; }
+  .home img { display: block; height: 28px; width: auto; }
+  header.past-logo .home { opacity: 1; transform: none; pointer-events: auto; }
+  section { scroll-margin-top: 96px; } #how { scroll-margin-top: 24px; }
   header .wrap { display: flex; align-items: center; justify-content: flex-end; gap: 16px; min-height: 64px; }
   .nav { display: flex; gap: 22px; font: 500 11px var(--mono); letter-spacing: .14em; }
-  .nav a { color: var(--faint); text-decoration: none; }
+  .nav a { color: var(--faint); text-decoration: none; white-space: nowrap; }
   .nav a:hover { color: var(--accent); }
 
   /* Hero: the logo's maze, solved */
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding-block: clamp(28px, 5vw, 56px) clamp(56px, 8vw, 96px); }
-  .maze { display: block; width: min(440px, 76vw); aspect-ratio: 1; margin: 0; border: 0; padding: 0; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding-block: clamp(36px, 6vw, 72px) clamp(56px, 8vw, 96px); }
+  .maze { display: block; width: min(270px, 58vw); aspect-ratio: 1; margin: 0; border: 0; padding: 0; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .maze:focus-visible { outline: 2px solid var(--accent); outline-offset: 12px; border-radius: 50%; }
   .maze svg { display: block; width: 100%; height: 100%; overflow: visible; }
   #walls, #goal, #runner, .maze svg { transform-box: fill-box; transform-origin: center; }
@@ -67,7 +78,7 @@
   #trail { fill: none; stroke: var(--cream); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
   #runner { fill: var(--cream); opacity: 0; filter: drop-shadow(0 0 3px rgba(242, 237, 227, .55)); }
   .ripple { fill: none; stroke: var(--secondary); stroke-width: 2.5px; vector-effect: non-scaling-stroke; opacity: 0; transform-box: fill-box; transform-origin: center; }
-  .wordmark { display: block; width: min(300px, 62vw); height: auto; margin: clamp(30px, 4vw, 44px) 0 22px; }
+  .wordmark { display: block; width: min(230px, 56vw); height: auto; margin: 30px 0 18px; }
   .lede { max-width: 34ch; margin: 0 0 34px; color: var(--muted); font-size: clamp(17px, 2vw, 19px); line-height: 1.55; }
   .download { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .button {
@@ -124,6 +135,16 @@
 
   /* Install */
   .install { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .free { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 64px); align-items: start; }
+  .free p { max-width: 54ch; margin: 0 0 16px; color: var(--muted); font-size: 17px; }
+  .free p strong { color: var(--text); font-weight: 500; }
+  .sponsor { display: inline-flex; align-items: center; gap: 10px; margin-top: 10px; border: 1px solid var(--line); border-radius: 11px; padding: 14px 20px; color: var(--cream); text-decoration: none; font: 600 11px var(--mono); letter-spacing: .12em; transition: border-color .15s, color .15s; }
+  .sponsor:hover { border-color: var(--accent); color: var(--accent); }
+  .giants { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+  .giants li { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .giants a { color: var(--text); text-decoration: none; font-weight: 500; }
+  .giants a:hover { color: var(--accent); }
+  .giants .what { color: var(--faint); font: 500 11px/1.9 var(--mono); letter-spacing: .06em; text-align: right; }
   .card { border: 1px solid var(--line); border-radius: 14px; padding: 26px 26px 22px; background: var(--raised); }
   .card.here { border-color: var(--accent); }
   .card h3 { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 4px; color: var(--cream); font-size: 20px; font-weight: 600; }
@@ -147,8 +168,9 @@
   footer a { text-decoration: none; }
   footer a:hover, footer .made a:hover { color: var(--accent); border-color: var(--accent); }
 
+  @media (max-width: 560px) { .nav a.optional { display: none; } .nav { gap: 16px; } }
   @media (max-width: 860px) {
-    .facts, .install { grid-template-columns: minmax(0, 1fr); }
+    .facts, .install, .free { grid-template-columns: minmax(0, 1fr); }
     .facts div, .facts div + div { padding: 22px 0; border-left: 0; }
     .facts div + div { border-top: 1px solid var(--line); }
     .steps li { grid-template-columns: 52px minmax(0, 1fr); }
@@ -159,9 +181,11 @@
 <body>
 <header>
   <div class="wrap">
+    <a class="home" href="#" aria-label="Back to top"><img src="brand/lockup.svg" alt="" width="117" height="28" /></a>
     <nav class="nav">
       <a href="#how">HOW TO USE</a>
       <a href="#install">INSTALL</a>
+      <a class="optional" href="#free">WHY FREE</a>
       <a href="https://github.com/gonzalocasas/vocalika">GITHUB</a>
     </nav>
   </div>
@@ -278,6 +302,32 @@
         The app is not yet signed by Apple or Microsoft, which is why the steps above are needed.
         On Linux, or to hack on it, <a href="https://github.com/gonzalocasas/vocalika#getting-started">run it from source</a>.
       </p>
+    </div>
+  </section>
+  <section id="free" style="padding-top:0">
+    <div class="wrap">
+      <p class="eyebrow">Open source</p>
+      <h2>Why is it free?</h2>
+      <div class="free">
+        <div>
+          <p>Vocalika is built on the shoulders of giants. It sits on top of a great many free and open source projects, the work of thousands of people who gave it away, and making it free is a small way of giving something back.</p>
+          <p>It is yours to use, study and change, under the MIT license.</p>
+          <p><strong>If Vocalika is useful to you commercially</strong>, as a teacher, a studio or a performer, please consider sponsoring it publicly on GitHub.</p>
+          <a class="sponsor" href="https://github.com/sponsors/gonzalocasas">♥&nbsp; SPONSOR ON GITHUB</a>
+        </div>
+        <ul class="giants" aria-label="Some of the projects Vocalika is built on">
+          <li><span class="names"><a href="https://github.com/facebookresearch/demucs">Demucs</a></span><span class="what">pulls the voice out of the mix</span></li>
+          <li><span class="names"><a href="https://github.com/Dream-High/RMVPE">RMVPE</a></span><span class="what">tracks pitch</span></li>
+          <li><span class="names"><a href="https://pytorch.org/audio/stable/tutorials/forced_alignment_for_multilingual_data_tutorial.html">MMS</a></span><span class="what">times lyrics to the voice</span></li>
+          <li><span class="names"><a href="https://pytorch.org">PyTorch</a></span><span class="what">runs the models</span></li>
+          <li><span class="names"><a href="https://ffmpeg.org">FFmpeg</a></span><span class="what">reads and writes audio, via PyAV</span></li>
+          <li><span class="names"><a href="https://librosa.org">librosa</a>, <a href="https://numpy.org">NumPy</a>, <a href="https://scipy.org">SciPy</a></span><span class="what">the signal processing</span></li>
+          <li><span class="names"><a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a></span><span class="what">fetches songs</span></li>
+          <li><span class="names"><a href="https://lrclib.net">LRCLIB</a></span><span class="what">finds the lyrics</span></li>
+          <li><span class="names"><a href="https://vuejs.org">Vue</a>, <a href="https://plotly.com/javascript/">Plotly</a>, <a href="https://fastapi.tiangolo.com">FastAPI</a></span><span class="what">the app itself</span></li>
+          <li><span class="names"><a href="https://tauri.app">Tauri</a>, <a href="https://docs.astral.sh/uv/">uv</a></span><span class="what">the desktop app and its installer</span></li>
+        </ul>
+      </div>
     </div>
   </section>
 </main>
@@ -413,6 +463,14 @@
       if (byHand && navigator.vibrate) navigator.vibrate([14, 50, 22])
       setTimeout(() => { running = false }, 900)
     }
+
+    // The bar turns solid-edged once the page moves, and carries the logo
+    // once the big one has scrolled away.
+    const header = document.querySelector("header")
+    const onScroll = () => header.classList.toggle("scrolled", scrollY > 4)
+    addEventListener("scroll", onScroll, { passive: true }); onScroll()
+    new IntersectionObserver(([entry]) => header.classList.toggle("past-logo", !entry.isIntersecting),
+      { rootMargin: "-64px 0px 0px 0px" }).observe(button)
 
     button.addEventListener("click", () => play(true))
     if (!reduce.matches) setTimeout(() => play(false), 500)
