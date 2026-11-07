@@ -6,3 +6,13 @@ export async function apiJson<T>(input: RequestInfo | URL, init?: RequestInit): 
   if (!response.ok) throw new ApiError(payload.detail ?? `Request failed (${response.status})`)
   return payload
 }
+
+let desktopApp: Promise<boolean> | null = null
+
+/** Whether this page runs inside the desktop app (asked once, then remembered). */
+export function isDesktopApp(): Promise<boolean> {
+  desktopApp ??= apiJson<{ desktop: boolean }>("/api/settings/app")
+    .then((status) => status.desktop)
+    .catch(() => false)
+  return desktopApp
+}

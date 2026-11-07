@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
+from vocalika import desktop
 from vocalika.api.lyrics import build_lyrics_timing
 from vocalika.api.practice import build_practice_plan, score_attempt
 from vocalika.api.reference_pitch import build_reference_pitch
@@ -405,8 +406,8 @@ def create_projects_router(service: ProjectService) -> APIRouter:
         def envelope() -> dict[str, list[float]]:
             waveform_path = source
             if take.analysis_path is not None:
-                analysis_audio = load_take_artifact(take).get("performance", {}).get(
-                    "analysis_audio"
+                analysis_audio = (
+                    load_take_artifact(take).get("performance", {}).get("analysis_audio")
                 )
                 if analysis_audio and Path(analysis_audio).is_file():
                     waveform_path = Path(analysis_audio)
@@ -463,5 +464,25 @@ def create_projects_router(service: ProjectService) -> APIRouter:
     @router.post("/{project_id}/exports", response_class=FileResponse)
     async def render_export(project_id: str, request: ExportRequest) -> FileResponse:
         return await create_export(project_id, request, preview=False)
+
+    @router.post("/{project_id}/exports/save")
+    async def save_export(project_id: str, request: ExportRequest) -> dict[str, str]:
+        """Desktop app only: render into Downloads and show it in Finder/Explorer."""
+        if not desktop.is_desktop():
+            raise HTTPException(
+                status_code=404, detail="Saving to a folder is a desktop app feature."
+            )
+        response = await create_export(project_id, request, preview=False)
+        try:
+            source = Path(response.path)
+            saved = await run_in_threadpool(
+                desktop.save_copy, source, response.filename or source.name
+            )
+        except OSError as error:
+            raise HTTPException(
+                status_code=422, detail=f"The mix could not be saved: {error}"
+            ) from error
+        desktop.reveal(saved)
+        return {"path": str(saved), "filename": saved.name}
 
     return router

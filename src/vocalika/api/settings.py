@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
+from vocalika import desktop
 from vocalika.storage import StorageError, StorageManager, describe, normalize, pick_folder
 
 
@@ -23,6 +24,12 @@ class StorageChange(BaseModel):
 
 def create_settings_router(storage: StorageManager) -> APIRouter:
     router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+    @router.get("/app")
+    def app_status() -> dict[str, bool]:
+        # The page asks instead of guessing from the browser: the desktop
+        # app's window is an ordinary web view on the same local server.
+        return {"desktop": desktop.is_desktop()}
 
     @router.get("/storage")
     def storage_status() -> dict[str, Any]:

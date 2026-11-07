@@ -8,6 +8,7 @@ import pytest
 import soundfile as sf
 from httpx import ASGITransport, AsyncClient
 
+from vocalika import desktop
 from vocalika.api.app import create_app
 from vocalika.api.projects import _project_payload
 from vocalika.audio import media
@@ -19,7 +20,9 @@ from vocalika.projects.repository import ProjectRepository
 @pytest.mark.anyio
 @pytest.mark.parametrize("captured", [None, -0.25])
 async def test_project_export_places_analyzed_take_on_reference_timeline(
-    tmp_path: Path, captured: float | None,
+    tmp_path: Path,
+    captured: float | None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sample_rate = 16_000
     project_id = "a" * 32
@@ -121,7 +124,10 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
     assert result.media_type == "audio/wav"
 
     preview = ProjectExportService(repository).render(
-        project_id, take_id, instrumental_db=-24, preview=True,
+        project_id,
+        take_id,
+        instrumental_db=-24,
+        preview=True,
     )
     preview_samples, preview_rate = sf.read(preview.path, always_2d=True)
     assert preview_rate == exported_rate
@@ -146,6 +152,27 @@ async def test_project_export_places_analyzed_take_on_reference_timeline(
     assert response.headers["content-type"] == "audio/wav"
     assert "practice-song_first-take_mix.wav" in response.headers["content-disposition"]
     assert len(response.content) > 44_100
+
+    # The desktop app saves into Downloads and reveals the file instead.
+    request = {"take_id": take_id, "instrumental_db": -24, "output_format": "wav"}
+    save_url = f"/api/projects/{project_id}/exports/save"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        assert (await client.get("/api/settings/app")).json() == {"desktop": False}
+        assert (await client.post(save_url, json=request)).status_code == 404
+
+    downloads = tmp_path / "Downloads"
+    revealed: list[Path] = []
+    monkeypatch.setenv("VOCALIKA_DESKTOP", "1")
+    monkeypatch.setattr(desktop, "downloads_directory", lambda: downloads)
+    monkeypatch.setattr(desktop, "reveal", revealed.append)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        assert (await client.get("/api/settings/app")).json() == {"desktop": True}
+        first = (await client.post(save_url, json=request)).json()
+        second = (await client.post(save_url, json=request)).json()
+    assert first["path"] == str(downloads / "practice-song_first-take_mix.wav")
+    assert second["path"] == str(downloads / "practice-song_first-take_mix (2).wav")
+    assert revealed == [Path(first["path"]), Path(second["path"])]
+    assert Path(first["path"]).read_bytes() == response.content
 
 
 def test_export_channel_routing_modes() -> None:

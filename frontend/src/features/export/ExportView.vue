@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+
+import { apiJson, isDesktopApp } from "../../shared/api"
 
 import type { Project } from "../../shared/types"
 import ProjectWaveform from "../projects/ProjectWaveform.vue"
@@ -16,6 +18,8 @@ const performanceChannel = ref<"left" | "right">("right")
 const busy = ref<"preview" | "render" | null>(null)
 const error = ref("")
 const previewUrl = ref("")
+const desktop = ref(false)
+const savedPath = ref("")
 const previewAudio = ref<HTMLAudioElement | null>(null)
 const selectedTake = computed(() => props.project.takes.find((take) => take.id === takeId.value) ?? null)
 const trimDuration = computed(() => (
@@ -38,23 +42,39 @@ function clearPreview(): void {
   previewUrl.value = ""
 }
 
+function exportSettings(): string {
+  return JSON.stringify({
+    take_id: takeId.value,
+    instrumental_db: instrumentalDb.value,
+    output_format: outputFormat.value,
+    channel_layout: channelLayout.value,
+    performance_channel: performanceChannel.value,
+  })
+}
+
 async function requestExport(preview: boolean): Promise<void> {
   if (!takeId.value) return
   busy.value = preview ? "preview" : "render"
   error.value = ""
+  savedPath.value = ""
   try {
+    if (!preview && desktop.value) {
+      // The desktop app saves into Downloads and shows the file in Finder or
+      // Explorer; a browser download would leave the singer to go find it.
+      const saved = await apiJson<{ path: string }>(`/api/projects/${props.project.id}/exports/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: exportSettings(),
+      })
+      savedPath.value = saved.path
+      return
+    }
     const response = await fetch(
       `/api/projects/${props.project.id}/exports${preview ? "/preview" : ""}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          take_id: takeId.value,
-          instrumental_db: instrumentalDb.value,
-          output_format: outputFormat.value,
-          channel_layout: channelLayout.value,
-          performance_channel: performanceChannel.value,
-        }),
+        body: exportSettings(),
       },
     )
     if (!response.ok) {
@@ -86,6 +106,9 @@ async function requestExport(preview: boolean): Promise<void> {
   }
 }
 
+onMounted(async () => {
+  desktop.value = await isDesktopApp()
+})
 onBeforeUnmount(clearPreview)
 </script>
 
@@ -154,12 +177,13 @@ onBeforeUnmount(clearPreview)
 
       <audio v-audio-output v-if="previewUrl" ref="previewAudio" class="export-preview" controls :src="previewUrl"></audio>
       <p v-if="error" class="inline-error">{{ error }}</p>
+      <p v-if="savedPath" class="feature-note export-saved">Saved to {{ savedPath }}</p>
       <div class="export-actions">
         <button class="solid-button" :disabled="!selectedTake || !project.reference.instrumental_path || busy !== null" @click="requestExport(true)">
           {{ busy === "preview" ? "PREPARING…" : "▶ PREVIEW 20 SEC" }}
         </button>
         <button class="accent-button" :disabled="!selectedTake || !project.reference.instrumental_path || busy !== null" @click="requestExport(false)">
-          {{ busy === "render" ? "RENDERING…" : "RENDER & DOWNLOAD →" }}
+          {{ busy === "render" ? "RENDERING…" : desktop ? "RENDER & SAVE →" : "RENDER & DOWNLOAD →" }}
         </button>
       </div>
     </div>

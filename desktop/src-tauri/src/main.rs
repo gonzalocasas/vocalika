@@ -278,6 +278,8 @@ fn isolated_environment(paths: &Paths) -> Vec<(String, String)> {
         ("HF_HOME".into(), text(paths.models.join("huggingface"))),
         ("VOCALIKA_CACHE_DIR".into(), text(paths.cache.clone())),
         ("VOCALIKA_SETTINGS".into(), text(paths.settings.clone())),
+        // Lets the server do desktop things, like showing an export in Finder.
+        ("VOCALIKA_DESKTOP".into(), "1".into()),
         // Anything else that follows the XDG convention (yt-dlp's cache) or
         // keeps its own config folder (matplotlib, if a library pulls it in).
         ("XDG_CACHE_HOME".into(), text(paths.runtime.join("xdg-cache"))),
