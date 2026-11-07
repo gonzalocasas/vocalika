@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/gonzalocasas/vocalika/compare/v0.2.0...v0.2.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **desktop:** find npm on Windows when gathering the installer resources ([74b5232](https://github.com/gonzalocasas/vocalika/commit/74b52325311c9cf2153831e573cc7e15b8a38fc0))
+
 ## [0.2.0](https://github.com/gonzalocasas/vocalika/compare/v0.1.0...v0.2.0) (2026-11-06)
 
 
