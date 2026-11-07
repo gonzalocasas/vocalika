@@ -5,7 +5,9 @@ name: Release
 # Merging it tags the release; the desktop apps are then built on each
 # platform and attached to it.
 #
-# Run it by hand with a tag to rebuild the apps for an existing release.
+# Run it by hand with a tag to rebuild the apps for an existing release, or
+# without one to test-build the chosen branch: the installers are then kept
+# as artifacts of the run instead of being attached to a release.
 
 on:
   push:
@@ -13,8 +15,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to build the desktop apps for (e.g. v0.2.0)
-        required: true
+        description: Release tag to build and attach the apps to (e.g. v0.2.0); empty test-builds the branch
+        required: false
 
 permissions:
   contents: read
@@ -71,7 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ env.TAG || github.ref }}
       # This uv is also the one bundled into the app, which builds the user's
       # environment with it on first start.
       - uses: astral-sh/setup-uv@v6
@@ -100,7 +102,15 @@ jobs:
         run: npx tauri build --bundles ${{ matrix.bundles }}
         working-directory: desktop
       - name: Attach it to the release
+        if: env.TAG != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" ${{ matrix.assets }} --clobber
+      - name: Keep it with the run (test build)
+        if: env.TAG == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vocalika ${{ matrix.name }}
+          path: ${{ matrix.assets }}
+          if-no-files-found: error
