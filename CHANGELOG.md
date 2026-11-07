@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/gonzalocasas/vocalika/compare/v0.2.1...v0.2.2) (2026-11-07)
+
+
+### Bug Fixes
+
+* **desktop:** let the installed macOS app use the microphone ([b7de5d5](https://github.com/gonzalocasas/vocalika/commit/b7de5d5652e6e54ef9c5ac96800b2c27727e01f3))
+
 ## [0.2.1](https://github.com/gonzalocasas/vocalika/compare/v0.2.0...v0.2.1) (2026-11-07)
 
 
