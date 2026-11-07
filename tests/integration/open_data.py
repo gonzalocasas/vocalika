@@ -2,7 +2,9 @@
 
 Each dataset is installed by ``scripts/fetch_open_datasets.py``, which writes a
 marker file once the pinned archive has been verified and extracted. Tests ask
-for a dataset through :func:`dataset_root`, which skips them when it is absent.
+for a dataset through :func:`dataset_root`, which fails them when it is absent:
+a forgotten download must not pass as a green run. To leave these tests out
+on purpose, deselect them with ``-m "not open_data"``.
 """
 
 from __future__ import annotations
@@ -32,7 +34,11 @@ ANALYSIS_SAMPLE_RATE = AnalysisConfig().analysis_sample_rate
 def dataset_root(key: str) -> Path:
     root = DATA_ROOT / key
     if not (root / ".vocalika-dataset.json").is_file():
-        pytest.skip(f"optional dataset {key!r} is absent; fetch it with: {FETCH_COMMAND} {key}")
+        pytest.fail(
+            f"open dataset {key!r} is not installed under {DATA_ROOT}; fetch it with "
+            f'`{FETCH_COMMAND} {key}`, or deselect these tests with -m "not open_data"',
+            pytrace=False,
+        )
     return root
 
 

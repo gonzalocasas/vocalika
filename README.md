@@ -162,7 +162,8 @@ uv sync --extra dev --extra real-input
 uv run ruff check src tests
 uv run ruff format --check src tests
 uv run mypy
-uv run pytest
+uv run python scripts/fetch_open_datasets.py   # once: the open test datasets
+uv run pytest                                  # or -m "not open_data" without them
 npm --prefix frontend test
 npm --prefix frontend run build
 ```

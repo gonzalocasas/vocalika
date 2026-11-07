@@ -30,12 +30,17 @@ F0, and chroma archives. Use `--keep-archives` to retain downloaded ZIP files.
 Use `--target PATH` with `VOCALIKA_OPEN_DATA_DIR=PATH` if the datasets should
 live outside the default directory.
 
-When the data is absent, its tests are reported as skipped. Once fetched, run
-the open-data tests with:
+A plain `uv run pytest` includes these tests, and one whose dataset is not
+installed **fails**, naming the fetch command: a forgotten download must not
+pass as a green run. Run only the open-data tests, or everything else, with:
 
 ```bash
 uv run pytest -m open_data
+uv run pytest -m "not open_data"
 ```
+
+CI runs both, as separate jobs of the Tests workflow, with the datasets
+fetched once and cached.
 
 The Vocadito tests send all 40 tracks, covering 29 singers and 9 languages,
 through Vocalika's production pitch path -- RMVPE with second-voice search,

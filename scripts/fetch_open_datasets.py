@@ -190,7 +190,7 @@ def fetch(dataset: Dataset, root: Path, *, keep_archives: bool) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Fetch pinned open datasets used by Vocalika's opt-in integration tests."
+        description="Fetch pinned open datasets used by Vocalika's open-data integration tests."
     )
     parser.add_argument(
         "datasets",
