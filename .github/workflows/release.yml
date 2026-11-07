@@ -61,10 +61,14 @@ jobs:
             runner: macos-15
             bundles: dmg
             assets: desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            # A fixed name, so .../releases/latest/download/<name> (the
+            # website's links) always points at the newest build.
+            release_name: Vocalika-macOS-AppleSilicon.dmg
           - name: Windows x64
             runner: windows-latest
             bundles: nsis
             assets: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            release_name: Vocalika-Windows-x64-setup.exe
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
@@ -106,7 +110,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" ${{ matrix.assets }} --clobber
+        run: |
+          cp ${{ matrix.assets }} "${{ matrix.release_name }}"
+          gh release upload "$TAG" "${{ matrix.release_name }}" --clobber
       - name: Keep it with the run (test build)
         if: env.TAG == ''
         uses: actions/upload-artifact@v4
