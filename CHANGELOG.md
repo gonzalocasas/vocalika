@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/gonzalocasas/vocalika/compare/v0.2.2...v0.3.0) (2026-11-07)
+
+
+### Features
+
+* **desktop:** save exports to Downloads and show them in Finder or Explorer ([efff2d2](https://github.com/gonzalocasas/vocalika/commit/efff2d268ceff43f063d6039d80199b63ab2a9d0))
+
+
+### Documentation
+
+* add the Vocalika website, published with GitHub Pages ([80859aa](https://github.com/gonzalocasas/vocalika/commit/80859aab7e755e3c2cedd3bf36063efc5c5ef917))
+* **site:** new tagline, and commas instead of dots under the download button ([f8d1760](https://github.com/gonzalocasas/vocalika/commit/f8d1760ccd38cb8cc6ab19ff4985d2f9fc0f819f))
+* **site:** smaller logo, a glass bar that stays on top, and why it is free ([39af5c0](https://github.com/gonzalocasas/vocalika/commit/39af5c0ed351941f1f43472f7d176b05ca183271))
+* **site:** solve the logo's maze live in the page; a click starts the dot there ([1472263](https://github.com/gonzalocasas/vocalika/commit/14722632cd75c138e3f73dace9cc336f5eea4ef2))
+* **site:** the logo's maze as the hero, plainer copy, sponsor link ([7dea82f](https://github.com/gonzalocasas/vocalika/commit/7dea82f2a4dfa40978df2f818cef0c21575c6cb9))
+* the website lives at gnz.io/vocalika ([944db9d](https://github.com/gonzalocasas/vocalika/commit/944db9dadfdb30a2062fe7cc52d9962c1b7db64b))
+
 ## [0.2.2](https://github.com/gonzalocasas/vocalika/compare/v0.2.1...v0.2.2) (2026-11-07)
 
 
