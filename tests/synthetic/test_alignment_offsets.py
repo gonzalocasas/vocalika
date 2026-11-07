@@ -241,10 +241,13 @@ def test_known_audio_offset_is_removed_before_pitch_comparison(
 
 @pytest.mark.parametrize("duration_difference", [0.0, 0.1, 0.3])
 @pytest.mark.parametrize(
-    "estimator", [estimate_vocal_envelope_offset, estimate_spectral_change_offset],
+    "estimator",
+    [estimate_vocal_envelope_offset, estimate_spectral_change_offset],
 )
 def test_nearly_equal_lengths_do_not_fabricate_high_confidence(
-    tmp_path: Path, duration_difference: float, estimator,
+    tmp_path: Path,
+    duration_difference: float,
+    estimator,
 ) -> None:
     reference, performance = _write_delayed_audio_pair(tmp_path, duration_difference)
     estimate = estimator(reference, performance)
@@ -259,11 +262,15 @@ def test_containment_boundary_peak_is_not_a_verified_offset(tmp_path, monkeypatc
     long = np.concatenate([short, np.zeros(150)])
     reference = tmp_path / "reference.wav"
     performance = tmp_path / "performance.wav"
-    monkeypatch.setattr("vocalika.analysis.offset._rms_envelope",
-                        lambda path, *args: long if path == reference else short)
+    monkeypatch.setattr(
+        "vocalika.analysis.offset._rms_envelope",
+        lambda path, *args: long if path == reference else short,
+    )
     assert estimate_vocal_envelope_offset(reference, performance).confidence == 0
     short_features = rng.normal(size=(100, 5))
     long_features = np.concatenate([short_features, np.zeros((150, 5))])
-    monkeypatch.setattr("vocalika.analysis.offset._spectral_change_features",
-                        lambda path, *args: long_features if path == reference else short_features)
+    monkeypatch.setattr(
+        "vocalika.analysis.offset._spectral_change_features",
+        lambda path, *args: long_features if path == reference else short_features,
+    )
     assert estimate_spectral_change_offset(reference, performance).confidence == 0

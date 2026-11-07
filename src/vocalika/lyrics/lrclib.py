@@ -65,17 +65,19 @@ def rank_candidates(
             # A few seconds apart is the same song in another release; a
             # minute apart is a live version or a different song.
             score -= min(0.3, abs(float(duration) - duration_seconds) / 60)
-        scored.append((
-            score,
-            LyricsCandidate(
-                id=int(row["id"]),
-                track=track,
-                artist=artist,
-                album=row.get("albumName") or None,
-                duration_seconds=float(duration) if duration else None,
-                lyrics=text,
-            ),
-        ))
+        scored.append(
+            (
+                score,
+                LyricsCandidate(
+                    id=int(row["id"]),
+                    track=track,
+                    artist=artist,
+                    album=row.get("albumName") or None,
+                    duration_seconds=float(duration) if duration else None,
+                    lyrics=text,
+                ),
+            )
+        )
     scored.sort(key=lambda item: item[0], reverse=True)
     # The same lyric is often uploaded once per album it appears on.
     unique: list[LyricsCandidate] = []

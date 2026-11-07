@@ -80,8 +80,8 @@ def create_app(
     library_directory = (library_directory or repository_root / "analysis-output").resolve()
     if storage is None:
         projects_directory = (
-            projects_directory or library_directory / PROJECTS_FOLDER
-        ).expanduser().resolve()
+            (projects_directory or library_directory / PROJECTS_FOLDER).expanduser().resolve()
+        )
         storage = StorageSettings(None, projects_directory.parent)
     else:
         projects_directory = storage_projects_directory(storage.data_directory)

@@ -224,8 +224,11 @@ def estimate_vocal_envelope_offset(
     # A short containment search cannot establish a unique timing offset.
     # In particular, equal-length recordings used to report ~1 confidence
     # after comparing only one candidate. Boundary peaks are not resolved.
-    if (scores.size <= 2 * frames_per_second + 1 or not remote.size
-            or best_index in (0, scores.size - 1)):
+    if (
+        scores.size <= 2 * frames_per_second + 1
+        or not remote.size
+        or best_index in (0, scores.size - 1)
+    ):
         confidence = 0.0
     start_seconds = best_index / frames_per_second
     offset_seconds = -start_seconds if reference_is_longer else start_seconds
@@ -327,8 +330,11 @@ def estimate_spectral_change_offset(
     height_strength = (best_correlation - median) / (5.0 * robust_scale)
     uniqueness_strength = peak_margin / (1.25 * robust_scale)
     confidence = float(np.clip(min(height_strength, uniqueness_strength), 0.0, 1.0))
-    if (scores.size <= 2 * frames_per_second + 1 or not remote.size
-            or best_index in (0, scores.size - 1)):
+    if (
+        scores.size <= 2 * frames_per_second + 1
+        or not remote.size
+        or best_index in (0, scores.size - 1)
+    ):
         confidence = 0.0
     start_seconds = best_index / frames_per_second
     offset_seconds = -start_seconds if reference_is_longer else start_seconds

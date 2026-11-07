@@ -15,9 +15,24 @@ ALIGNMENT_VERSION = 1
 # Words that open a section label rather than a sung line, as lyric sites
 # write them: "[Chorus]", "Verse 2:", "[Father:]".
 _LABEL_WORDS = {
-    "intro", "outro", "verse", "chorus", "pre-chorus", "prechorus", "post-chorus",
-    "bridge", "hook", "refrain", "interlude", "instrumental", "solo", "break",
-    "breakdown", "coda", "repeat", "spoken",
+    "intro",
+    "outro",
+    "verse",
+    "chorus",
+    "pre-chorus",
+    "prechorus",
+    "post-chorus",
+    "bridge",
+    "hook",
+    "refrain",
+    "interlude",
+    "instrumental",
+    "solo",
+    "break",
+    "breakdown",
+    "coda",
+    "repeat",
+    "spoken",
 }
 
 
@@ -252,18 +267,22 @@ def align_lyrics(audio_path: Path, lyrics: str, aligner: LyricsAligner) -> dict[
             if word.token:
                 timing = timings[cursor]
                 cursor += 1
-            payload_words.append({
-                "text": word.text,
-                "start": timing.start if timing else None,
-                "end": timing.end if timing else None,
-                "score": timing.score if timing else None,
-            })
+            payload_words.append(
+                {
+                    "text": word.text,
+                    "start": timing.start if timing else None,
+                    "end": timing.end if timing else None,
+                    "score": timing.score if timing else None,
+                }
+            )
         timed = [word for word in payload_words if word["start"] is not None]
-        payload_lines.append({
-            "text": line.text,
-            "sung": line.sung,
-            "start": timed[0]["start"] if timed else None,
-            "end": timed[-1]["end"] if timed else None,
-            "words": payload_words,
-        })
+        payload_lines.append(
+            {
+                "text": line.text,
+                "sung": line.sung,
+                "start": timed[0]["start"] if timed else None,
+                "end": timed[-1]["end"] if timed else None,
+                "words": payload_words,
+            }
+        )
     return {"version": ALIGNMENT_VERSION, "aligner": aligner.name, "lines": payload_lines}

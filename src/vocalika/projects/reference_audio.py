@@ -42,8 +42,11 @@ def _keeps_duration(rendered: Path, source: Path) -> bool:
     source_seconds = media.duration_seconds(source)
     if rendered_seconds is None or not source_seconds:
         return False
-    return (math.isfinite(rendered_seconds) and math.isfinite(source_seconds)
-            and abs(rendered_seconds - source_seconds) <= 0.05)
+    return (
+        math.isfinite(rendered_seconds)
+        and math.isfinite(source_seconds)
+        and abs(rendered_seconds - source_seconds) <= 0.05
+    )
 
 
 class ReferenceAudioService:
@@ -89,7 +92,10 @@ class ReferenceAudioService:
         ]
         try:
             media.transcode(
-                source, temporary, codec="flac", filters=filters,
+                source,
+                temporary,
+                codec="flac",
+                filters=filters,
                 options={"compression_level": "5"},
             )
             if not temporary.is_file() or temporary.stat().st_size == 0:

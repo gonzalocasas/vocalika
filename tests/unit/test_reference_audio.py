@@ -150,6 +150,7 @@ def test_a_cached_transposition_of_the_wrong_length_is_rendered_again(tmp_path: 
 
 def test_duration_guard_rejects_small_drift_and_unreadable_files(tmp_path: Path) -> None:
     from vocalika.projects.reference_audio import _keeps_duration
+
     source, drifted = tmp_path / "source.wav", tmp_path / "drifted.wav"
     # 100 ms over 30 s passed the old 1% threshold, despite being audible.
     sf.write(source, np.zeros(30000, dtype=np.float32), 1000)
