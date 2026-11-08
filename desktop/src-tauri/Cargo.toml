@@ -1,6 +1,6 @@
 [package]
 name = "vocalika-desktop"
-version = "0.3.0"
+version = "0.4.0"
 description = "Desktop launcher: builds Vocalika's Python environment with uv, then shows the app"
 edition = "2021"
 
