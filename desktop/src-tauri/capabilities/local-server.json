@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "local-server",
+  "description": "The app page, served by Vocalika's own server on this machine, may hear of a downloaded update and ask to install it. Nothing else.",
+  "windows": ["main"],
+  "remote": { "urls": ["http://127.0.0.1:*"] },
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten", "allow-update-ready", "allow-install-update"]
+}

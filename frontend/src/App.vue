@@ -16,6 +16,7 @@ import type { AppRoute, ProjectTab } from "./routes"
 import TakesView from "./features/takes/TakesView.vue"
 import type { AnalysisArtifact, Project, StorageStatus, Take } from "./shared/types"
 import SettingsDialog from "./features/settings/SettingsDialog.vue"
+import UpdateNotice from "./features/update/UpdateNotice.vue"
 
 const {
   projects,
@@ -326,6 +327,7 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
         </a>
       </div>
       <div>
+        <UpdateNotice />
         <i></i><span>ENGINE READY</span>
         <button
           type="button"

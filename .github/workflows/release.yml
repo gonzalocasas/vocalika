@@ -3,7 +3,8 @@ name: Release
 # Release Please keeps a release pull request open on main, with the
 # changelog and version bumps worked out from Conventional Commit messages.
 # Merging it tags the release; the desktop apps are then built on each
-# platform and attached to it.
+# platform and attached to it, along with signed update bundles and the
+# latest.json that installed apps read to update themselves.
 #
 # Run it by hand with a tag to rebuild the apps for an existing release, or
 # without one to test-build the chosen branch: the installers are then kept
@@ -59,16 +60,22 @@ jobs:
           # x86_64 macOS wheels at the locked versions.
           - name: macOS Apple Silicon
             runner: macos-15
-            bundles: dmg
+            # The app bundle, tarred and signed, is the macOS update.
+            bundles: app,dmg
             assets: desktop/src-tauri/target/release/bundle/dmg/*.dmg
             # A fixed name, so .../releases/latest/download/<name> (the
             # website's links) always points at the newest build.
             release_name: Vocalika-macOS-AppleSilicon.dmg
+            update: desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
+            update_name: Vocalika-macOS-AppleSilicon.app.tar.gz
           - name: Windows x64
             runner: windows-latest
             bundles: nsis
             assets: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
             release_name: Vocalika-Windows-x64-setup.exe
+            # On Windows the installer itself is the update.
+            update: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            update_name: Vocalika-Windows-x64-setup.exe
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
@@ -102,9 +109,16 @@ jobs:
       - name: Gather uv, the locked requirements and the wheel
         run: npm run resources
         working-directory: desktop
-      - name: Build the installer
-        run: npx tauri build --bundles ${{ matrix.bundles }}
+      # Only CI signs updates, so local builds need no key: the updater
+      # artifacts are switched on here rather than in tauri.conf.json.
+      - name: Build the installer and the signed update
+        run: >-
+          npx tauri build --bundles ${{ matrix.bundles }}
+          --config '{"bundle":{"createUpdaterArtifacts":true}}'
         working-directory: desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - name: Attach it to the release
         if: env.TAG != ''
         shell: bash
@@ -112,7 +126,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp ${{ matrix.assets }} "${{ matrix.release_name }}"
-          gh release upload "$TAG" "${{ matrix.release_name }}" --clobber
+          cp ${{ matrix.update }} "${{ matrix.update_name }}"
+          cp ${{ matrix.update }}.sig "${{ matrix.update_name }}.sig"
+          files=("${{ matrix.release_name }}" "${{ matrix.update_name }}.sig")
+          # On Windows the update and the installer are one file.
+          if [ "${{ matrix.update_name }}" != "${{ matrix.release_name }}" ]; then
+            files+=("${{ matrix.update_name }}")
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber
       - name: Keep it with the run (test build)
         if: env.TAG == ''
         uses: actions/upload-artifact@v4
@@ -120,3 +141,33 @@ jobs:
           name: Vocalika ${{ matrix.name }}
           path: ${{ matrix.assets }}
           if-no-files-found: error
+
+  # Last, once every platform's update is attached: until latest.json is on
+  # the release, installed apps keep seeing the previous one as the newest.
+  update-manifest:
+    needs: [release-please, desktop]
+    if: >-
+      always() && needs.desktop.result == 'success' && (
+        (github.event_name == 'push' && needs.release-please.outputs.created == 'true')
+        || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.release-please.outputs.tag || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.7"
+      - name: Write latest.json from the attached signatures
+        run: |
+          mkdir signatures
+          gh release download "$TAG" --pattern '*.sig' --dir signatures
+          uv run --no-project desktop/update_manifest.py "$TAG" signatures latest.json
+      - name: Attach it to the release
+        run: gh release upload "$TAG" latest.json --clobber
