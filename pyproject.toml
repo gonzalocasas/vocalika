@@ -18,6 +18,8 @@ dependencies = [
   "librosa>=0.11,<1",
   # torch 2.2 is built against numpy 1.
   "numpy>=1.26,<2",
+  # Reads requirement markers for the About page's list of open source parts.
+  "packaging>=24",
   "platformdirs>=4.4,<5",
   "plotly>=6.0,<7",
   "python-multipart>=0.0.20,<1",
@@ -46,9 +48,18 @@ real-input = [
   # exact torch release, so this moves in lockstep with the torch in uv.lock;
   # releases from 2.9 on also drop forced_align.
   "torchaudio==2.2.2",
-  # `deno` installs the JavaScript runtime YouTube's challenges need, and
-  # `default` the solver scripts, so imports work with nothing else installed.
-  "yt-dlp[default,deno]>=2025.1.1",
+  # `deno` installs the JavaScript runtime YouTube's challenges need. The rest
+  # is yt-dlp's `default` extra (the challenge solver scripts, networking,
+  # decryption) without mutagen, which only tags and embeds thumbnails in
+  # downloads: Vocalika does neither, and it is GPL.
+  "yt-dlp[deno]>=2025.1.1",
+  "yt-dlp-ejs",
+  "brotli; implementation_name == 'cpython'",
+  "certifi",
+  "pycryptodomex",
+  "requests>=2.32.2,<3",
+  "urllib3>=2.0.2,<3",
+  "websockets>=13.0",
 ]
 
 [project.scripts]

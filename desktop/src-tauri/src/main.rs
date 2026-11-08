@@ -304,6 +304,11 @@ fn isolated_environment(paths: &Paths) -> Vec<(String, String)> {
         ("VOCALIKA_SETTINGS".into(), text(paths.settings.clone())),
         // Lets the server do desktop things, like showing an export in Finder.
         ("VOCALIKA_DESKTOP".into(), "1".into()),
+        // The launcher's own open source parts, for the About page.
+        (
+            "VOCALIKA_LAUNCHER_NOTICES".into(),
+            text(paths.resources.join("launcher-notices.json")),
+        ),
         // Anything else that follows the XDG convention (yt-dlp's cache) or
         // keeps its own config folder (matplotlib, if a library pulls it in).
         ("XDG_CACHE_HOME".into(), text(paths.runtime.join("xdg-cache"))),

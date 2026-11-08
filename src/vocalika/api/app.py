@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
+from vocalika.api.about import create_about_router
 from vocalika.api.projects import create_projects_router
 from vocalika.api.settings import create_settings_router
 from vocalika.api.uploads import safe_upload_name, save_upload
@@ -100,6 +101,7 @@ def create_app(
         analysis_runner=project_analysis_runner,
     )
     app.include_router(create_projects_router(project_service))
+    app.include_router(create_about_router())
     app.include_router(
         create_settings_router(
             StorageManager(

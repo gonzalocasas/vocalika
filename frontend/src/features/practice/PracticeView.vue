@@ -15,6 +15,7 @@ import {
 import { centsLabel, leapLabel, leapSpanLabel } from "./labels"
 import { useAttempt } from "./useAttempt"
 import { useTonePlayer } from "./useTonePlayer"
+import { openExternal } from "../../shared/externalLink"
 
 const props = defineProps<{ project: Project }>()
 
@@ -238,10 +239,10 @@ const countdown = computed(() => {
       </section>
       <p class="sample-credit">
         Reference notes played on the
-        <a href="https://archive.org/details/SalamanderGrandPianoV3" target="_blank" rel="noopener">
+        <a href="https://archive.org/details/SalamanderGrandPianoV3" target="_blank" rel="noopener" @click="openExternal">
           Salamander Grand Piano</a>
         by Alexander Holm, licensed
-        <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC-BY 3.0</a>.
+        <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener" @click="openExternal">CC-BY 3.0</a>.
         <span v-if="!tone.usingSamples.value">Samples unavailable — using a synthesised tone.</span>
       </p>
     </template>

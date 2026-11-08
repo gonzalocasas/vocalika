@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
 import { apiJson } from "../../shared/api"
+import AboutPanel from "../about/AboutPanel.vue"
 import AudioSettings from "./AudioSettings.vue"
 import type { FolderInspection, StorageStatus } from "../../shared/types"
 import { storageAction } from "./storageChoice"
@@ -9,7 +10,8 @@ import { storageAction } from "./storageChoice"
 // "setup" is the first start: a folder has to be chosen before anything else,
 // so the dialog cannot be dismissed.
 const props = defineProps<{ mode: "setup" | "settings" }>()
-const tab = ref<"storage" | "audio">("storage")
+const tab = ref<"storage" | "audio" | "about">("storage")
+const TITLES = { storage: "Storage", audio: "Audio devices", about: "About Vocalika" } as const
 const emit = defineEmits<{ changed: [status: StorageStatus]; close: [] }>()
 
 const status = ref<StorageStatus | null>(null)
@@ -135,7 +137,7 @@ onBeforeUnmount(() => {
         <div>
           <span class="settings-kicker">{{ mode === "setup" ? "WELCOME" : "SETTINGS" }}</span>
           <h3 id="settings-title">
-            {{ mode === "setup" ? "Where should Vocalika keep your songs?" : tab === "audio" ? "Audio devices" : "Storage" }}
+            {{ mode === "setup" ? "Where should Vocalika keep your songs?" : TITLES[tab] }}
           </h3>
         </div>
         <button v-if="mode === 'settings'" class="tool-button close" aria-label="Close settings" :disabled="saving" @click="requestClose">✕</button>
@@ -143,20 +145,23 @@ onBeforeUnmount(() => {
 
       <nav v-if="mode === 'settings'" class="settings-tabs" role="tablist" aria-label="Settings sections">
         <button
-          v-for="option in (['storage', 'audio'] as const)"
+          v-for="option in (['storage', 'audio', 'about'] as const)"
           :key="option"
           role="tab"
           :aria-selected="tab === option"
           :class="{ active: tab === option }"
           :disabled="saving"
           @click="tab = option"
-        >{{ option === "storage" ? "STORAGE" : "AUDIO" }}</button>
+        >{{ option.toUpperCase() }}</button>
       </nav>
 
       <div v-if="tab === 'audio'" class="settings-body">
         <AudioSettings />
       </div>
-      <footer v-if="tab === 'audio'" class="settings-footer">
+      <div v-else-if="tab === 'about'" class="settings-body">
+        <AboutPanel />
+      </div>
+      <footer v-if="tab === 'audio' || tab === 'about'" class="settings-footer">
         <button class="ghost-button accent-button" @click="requestClose">DONE</button>
       </footer>
 

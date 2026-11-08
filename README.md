@@ -185,6 +185,13 @@ described in the [product requirements](docs/PRD-001-MVP.md) and the
 This project uses the universal romanizer software 'uroman' written by Ulf
 Hermjakob, USC Information Sciences Institute (2015-2020).
 
+Everything else Vocalika is built on, with each license and its full text, is
+listed in the app under **Settings → About**: the models, sounds and
+services, and every Python, JavaScript and (in the desktop app) Rust package,
+read from what is installed. The lyric timing model, Meta's MMS aligner, is
+published for non-commercial use (CC BY-NC 4.0); Vocalika downloads it from
+Meta on first start rather than shipping it.
+
 When importing a project, choose **Mix** to separate vocals and instruments,
 **Vocals only** for an isolated voice, or **Instrumental only** for a prepared
 backing track. Instrumental projects support playback, transposition, recording,
