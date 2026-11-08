@@ -16,7 +16,12 @@ from typing import Any
 
 import pytest
 
-from vocalika.models.artifact import compare_artifacts, load_artifact, normalize_artifact
+from vocalika.models.artifact import (
+    SpreadTolerance,
+    compare_artifacts,
+    load_artifact,
+    normalize_artifact,
+)
 from vocalika.pipeline import run_analysis
 
 FIXTURE_DIRECTORY = Path(__file__).parents[1] / "fixtures" / "pitch_validation_samples"
@@ -49,13 +54,6 @@ PATH_TOLERANCES: dict[str, float] = {
     "comparison.frames.confidence": 0.02,
     "comparison.frames.performance_confidence": 0.02,
     "comparison.frames.reference_confidence": 0.02,
-    # One frame of the shared reference melody (143) comes out 0.62 c apart
-    # on different CI machines; a frame may move up to a cent, while the
-    # summaries below, over every frame, stay within a quarter cent.
-    "comparison.frames.performance_midi": 0.01,
-    "comparison.frames.reference_midi": 0.01,
-    "comparison.frames.absolute_error_cents": 1.0,
-    "comparison.frames.relative_error_cents": 1.0,
     "comparison.stable_pitch_regions.confidence": 2e-3,
     "comparison.stable_pitch_regions.performance_center_midi": 2e-3,
     "comparison.stable_pitch_regions.reference_center_midi": 2e-3,
@@ -76,6 +74,22 @@ PATH_TOLERANCES: dict[str, float] = {
     "alignment.global_offset_candidates.raw_correlation": 1e-4,
     "alignment.global_offset_candidates.peak_margin": 1e-5,
     "alignment.global_offset_candidates.confidence": 1e-6,
+}
+
+# Per-frame pitch, judged as a whole. Arithmetic-level noise (-120 dB) on the
+# reference melody moves a typical frame by 0.05 c and the 99th percentile by
+# under 0.4 c, but an unsure frame by up to a cent and one at a note's start
+# by 10 c; CI machines differ by that much on frame 143. So nearly every
+# frame must stay within half a cent, while a wrong note or octave, tens of
+# cents and more, still fails. The summaries above hold all frames together
+# to a quarter cent.
+_PITCH_SPREAD = SpreadTolerance(typical=0.005, share=0.02, worst=0.15)
+_CENTS_SPREAD = SpreadTolerance(typical=0.5, share=0.02, worst=15.0)
+SPREAD_TOLERANCES: dict[str, SpreadTolerance] = {
+    "comparison.frames.performance_midi": _PITCH_SPREAD,
+    "comparison.frames.reference_midi": _PITCH_SPREAD,
+    "comparison.frames.absolute_error_cents": _CENTS_SPREAD,
+    "comparison.frames.relative_error_cents": _CENTS_SPREAD,
 }
 
 
@@ -119,6 +133,7 @@ def test_pipeline_output_matches_the_golden_artifact(
             relative_tolerance=RELATIVE_TOLERANCE,
             absolute_tolerance=ABSOLUTE_TOLERANCE,
             path_tolerances=PATH_TOLERANCES,
+            spread_tolerances=SPREAD_TOLERANCES,
         )
     )
     assert not differences, "\n".join(
@@ -161,3 +176,29 @@ def test_a_field_tolerance_covers_every_list_element_and_nothing_else() -> None:
     assert list(compare_artifacts(expected, moved, path_tolerances=tolerances)) == [
         "regions[0].start: 2.0 != 2.1"
     ]
+
+
+def test_a_spread_tolerance_lets_a_few_frames_drift_but_not_many_or_far() -> None:
+    spreads = {"frames.cents": SpreadTolerance(typical=0.5, share=0.02, worst=15.0)}
+    expected = {"frames": {"cents": [10.0] * 100}}
+
+    def with_changes(changes: dict[int, float | None]) -> dict[str, Any]:
+        values: list[float | None] = [10.0] * 100
+        for index, value in changes.items():
+            values[index] = value
+        return {"frames": {"cents": values}}
+
+    def differences(changes: dict[int, float | None]) -> list[str]:
+        return list(compare_artifacts(expected, with_changes(changes), spread_tolerances=spreads))
+
+    # Every frame a little off, and two (2% of 100) by a cent: the CI drift.
+    assert not differences({index: 10.4 for index in range(100)} | {3: 11.0, 50: 9.0})
+    # A third frame beyond half a cent is one too many.
+    assert differences({3: 11.0, 50: 9.0, 70: 11.0}) == [
+        "frames.cents: 3 elements beyond 0.5, more than the 2 allowed: "
+        "[3] by 1, [50] by 1, [70] by 1"
+    ]
+    # One wrong note fails on its own.
+    assert differences({42: 110.0}) == ["frames.cents[42]: 10.0 != 110.0 (beyond 15.0)"]
+    # A frame that loses its pitch is a difference, not a drift.
+    assert differences({7: None}) == ["frames.cents[7]: 10.0 != None"]

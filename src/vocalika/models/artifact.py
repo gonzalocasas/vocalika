@@ -4,6 +4,7 @@ import json
 import math
 import re
 from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -84,6 +85,55 @@ def _tolerance_for(
     return max(matches) if matches else default
 
 
+@dataclass(frozen=True)
+class SpreadTolerance:
+    """How far a list of per-frame numbers may drift, as a whole.
+
+    Some per-frame values are not reproducible to the last digit across
+    machines: a frame the pitch tracker is unsure of moves by up to a cent
+    with arithmetic-level noise, and one at a note's start by more. A bound
+    on every element would have to be as loose as the worst frame. Instead,
+    most elements must stay within ``typical``; at most ``share`` of them
+    may go beyond it, and none beyond ``worst``.
+    """
+
+    typical: float
+    share: float
+    worst: float
+
+
+def _spread_for(path: str, spreads: Mapping[str, SpreadTolerance] | None) -> SpreadTolerance | None:
+    return spreads.get(path) if spreads else None
+
+
+def _compare_spread(
+    expected: list[Any], actual: list[Any], spread: SpreadTolerance, path: str
+) -> Iterator[str]:
+    beyond: list[tuple[int, float]] = []
+    for index, (left, right) in enumerate(zip(expected, actual, strict=True)):
+        if left is None or right is None or isinstance(left, bool) or isinstance(right, bool):
+            if left != right:
+                yield f"{path}[{index}]: {left!r} != {right!r}"
+            continue
+        left, right = float(left), float(right)
+        if math.isnan(left) or math.isnan(right):
+            if not (math.isnan(left) and math.isnan(right)):
+                yield f"{path}[{index}]: {left!r} != {right!r}"
+            continue
+        drift = abs(left - right)
+        if drift > spread.worst:
+            yield f"{path}[{index}]: {left!r} != {right!r} (beyond {spread.worst})"
+        elif drift > spread.typical:
+            beyond.append((index, drift))
+    allowed = int(spread.share * len(expected))
+    if len(beyond) > allowed:
+        listed = ", ".join(f"[{index}] by {drift:.3g}" for index, drift in beyond[:5])
+        yield (
+            f"{path}: {len(beyond)} elements beyond {spread.typical}, "
+            f"more than the {allowed} allowed: {listed}"
+        )
+
+
 def compare_artifacts(
     expected: Any,
     actual: Any,
@@ -91,6 +141,7 @@ def compare_artifacts(
     relative_tolerance: float = 1e-9,
     absolute_tolerance: float = 1e-12,
     path_tolerances: Mapping[str, float] | None = None,
+    spread_tolerances: Mapping[str, SpreadTolerance] | None = None,
     path: str = "",
 ) -> Iterator[str]:
     """Yield one human-readable line per difference between two artifacts.
@@ -104,6 +155,9 @@ def compare_artifacts(
     resampler decoded the audio. Those fields are bounded correlation scores,
     so an absolute bound is the meaningful one -- a relative bound is
     meaningless when the value sits near zero.
+
+    ``spread_tolerances`` maps the exact dotted path of a list of numbers to a
+    :class:`SpreadTolerance`, which judges the list as a whole.
     """
     if isinstance(expected, dict) and isinstance(actual, dict):
         for key in sorted(set(expected) | set(actual)):
@@ -119,6 +173,7 @@ def compare_artifacts(
                     relative_tolerance=relative_tolerance,
                     absolute_tolerance=absolute_tolerance,
                     path_tolerances=path_tolerances,
+                    spread_tolerances=spread_tolerances,
                     path=location,
                 )
         return
@@ -126,6 +181,10 @@ def compare_artifacts(
     if isinstance(expected, list) and isinstance(actual, list):
         if len(expected) != len(actual):
             yield f"{path}: length {len(expected)} != {len(actual)}"
+            return
+        spread = _spread_for(path, spread_tolerances)
+        if spread is not None:
+            yield from _compare_spread(expected, actual, spread, path)
             return
         differing = 0
         for index, (left, right) in enumerate(zip(expected, actual, strict=True)):
@@ -135,6 +194,7 @@ def compare_artifacts(
                 relative_tolerance=relative_tolerance,
                 absolute_tolerance=absolute_tolerance,
                 path_tolerances=path_tolerances,
+                spread_tolerances=spread_tolerances,
                 path=f"{path}[{index}]",
             ):
                 differing += 1
