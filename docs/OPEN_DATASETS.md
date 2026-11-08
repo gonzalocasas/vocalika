@@ -39,8 +39,11 @@ uv run pytest -m open_data
 uv run pytest -m "not open_data"
 ```
 
-CI runs both, as separate jobs of the Tests workflow, with the datasets
-fetched once and cached.
+In CI, the Tests workflow runs everything else on every commit. The Open
+datasets workflow (up to 45 minutes) runs when a change touches the analysis
+or scoring code, the dependencies or these tests, on every release pull
+request (release-please bumps `src/vocalika/__init__.py`), weekly, and by
+hand. The datasets are fetched once and cached.
 
 The Vocadito tests send all 40 tracks, covering 29 singers and 9 languages,
 through Vocalika's production pitch path -- RMVPE with second-voice search,

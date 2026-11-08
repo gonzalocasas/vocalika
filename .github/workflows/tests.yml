@@ -1,9 +1,7 @@
 name: Tests
 
-# Everything pytest collects, in two jobs: the fast suites, and the tests
-# against human-annotated open datasets (docs/OPEN_DATASETS.md). A dataset
-# that failed to install fails its tests rather than skipping them, so a
-# green run always means every test ran.
+# Lint, types, and every test that needs no open dataset, on every commit.
+# The open-data tests run from open-data.yml.
 
 on:
   push:
@@ -40,42 +38,3 @@ jobs:
       - run: uv run ruff format --check src tests scripts
       - run: uv run mypy
       - run: uv run pytest -m "not open_data"
-
-  open-data:
-    name: Open datasets (${{ matrix.name }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    concurrency:
-      group: tests-open-data-${{ matrix.datasets }}-${{ github.ref }}
-      cancel-in-progress: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Vocadito and MAST
-            datasets: vocadito mast-melody
-            tests: tests/integration/test_open_datasets.py
-          - name: Choral Singing Dataset
-            datasets: csd
-            tests: tests/integration/test_choral_singing.py
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-        with:
-          version: "0.13.7"
-          enable-cache: true
-      - run: sudo apt-get update && sudo apt-get install -y libsndfile1
-      - run: uv sync --locked --extra dev --python 3.12
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/torch
-          key: torch-hub-${{ hashFiles('src/vocalika/analysis/rmvpe.py') }}
-      # The fetcher pins each archive's size and checksum, so its own source
-      # is the cache key: a changed pin fetches afresh.
-      - uses: actions/cache@v4
-        with:
-          path: tests/external-data
-          key: open-data-${{ matrix.datasets }}-${{ hashFiles('scripts/fetch_open_datasets.py') }}
-      - name: Fetch the datasets (a no-op once cached)
-        run: uv run python scripts/fetch_open_datasets.py ${{ matrix.datasets }}
-      - run: uv run pytest -m open_data ${{ matrix.tests }}
