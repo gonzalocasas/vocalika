@@ -5,7 +5,6 @@
 
 ### Features
 
-* **projects:** search the song list, and call it "Your songs" ([3be54d9](https://github.com/gonzalocasas/vocalika/commit/3be54d9d8d5ae7c9326e50fee0e3082539ec06e3))
 * **projects:** search the song list, and call it "Your songs" ([c37c8d8](https://github.com/gonzalocasas/vocalika/commit/c37c8d8076008b607fb48918ea3a521db39cb4d1))
 
 
