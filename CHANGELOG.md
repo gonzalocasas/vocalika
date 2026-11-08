@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/gonzalocasas/vocalika/compare/v0.5.0...v0.5.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **desktop:** build the Windows installer again ([a807fcc](https://github.com/gonzalocasas/vocalika/commit/a807fcc5f3282e512b73984c2d04f1e0d956400a))
+
 ## [0.5.0](https://github.com/gonzalocasas/vocalika/compare/v0.4.1...v0.5.0) (2026-11-08)
 
 
