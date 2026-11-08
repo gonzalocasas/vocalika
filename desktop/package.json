@@ -1,7 +1,7 @@
 {
   "name": "vocalika-desktop",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.1",
   "scripts": {
     "resources": "uv run --no-project prepare_resources.py",
     "dev": "npm run resources && tauri dev",
