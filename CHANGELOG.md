@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/gonzalocasas/vocalika/compare/v0.4.1...v0.5.0) (2026-11-08)
+
+
+### Features
+
+* add an About tab with the version and all open source credits ([ebe744a](https://github.com/gonzalocasas/vocalika/commit/ebe744aee603fcc2217dfd43db698ceccb4c1da7))
+* **desktop:** update the app from GitHub releases ([20bc3d1](https://github.com/gonzalocasas/vocalika/commit/20bc3d197ed46da14cb14f402951296530e23110))
+
 ## [0.4.1](https://github.com/gonzalocasas/vocalika/compare/v0.4.0...v0.4.1) (2026-11-08)
 
 
