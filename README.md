@@ -110,7 +110,11 @@ database, or are pasted in by hand, and are timed against the isolated vocal
 with Meta's multilingual MMS forced aligner. The words are already known, so
 the model only has to place them in time — far more reliable on singing than
 transcribing it. On ten test songs it put nearly nine lines in ten within a
-second of hand-made timestamps, in about fifteen seconds per song.
+second of hand-made timestamps, in about fifteen seconds per song. Lyrics in
+other scripts — Greek, Cyrillic, Hebrew, Arabic, Japanese kana and more — are
+romanized with [uroman](https://github.com/isi-nlp/uroman) first, the way the
+aligner was trained; on a Greek song every word was timed, with line starts a
+median 0.2 s from hand-made timestamps.
 
 **Metrics.** Two error families, each in absolute terms and with an overall
 key shift factored out:
@@ -177,6 +181,9 @@ described in the [product requirements](docs/PRD-001-MVP.md) and the
 ## License
 
 [MIT](LICENSE)
+
+This project uses the universal romanizer software 'uroman' written by Ulf
+Hermjakob, USC Information Sciences Institute (2015-2020).
 
 When importing a project, choose **Mix** to separate vocals and instruments,
 **Vocals only** for an isolated voice, or **Instrumental only** for a prepared

@@ -13,6 +13,7 @@ from vocalika.lyrics.alignment import (
     LyricsAligner,
     MmsLyricsAligner,
     align_lyrics,
+    needs_romanizing,
 )
 from vocalika.projects.models import Project
 
@@ -47,11 +48,15 @@ def build_lyrics_timing(
     if not project.lyrics.strip():
         return {"version": ALIGNMENT_VERSION, "aligner": aligner.name, "lines": []}
     asset = LocalAudioSource(Path(project.reference.vocal_path)).acquire()
-    parameters = {
+    parameters: dict[str, Any] = {
         "lyrics_sha256": hashlib.sha256(project.lyrics.encode()).hexdigest(),
         "aligner": aligner.name,
         "version": ALIGNMENT_VERSION,
     }
+    # Lyrics in another script were left untimed before they were romanized;
+    # keying them apart re-times those songs without re-timing every other.
+    if needs_romanizing(project.lyrics):
+        parameters["romanizer"] = "uroman"
     path = cache.lyrics_timing_path(asset.content_hash, parameters)
     with _lock_for(str(path)):
         if path.is_file():
