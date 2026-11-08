@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/gonzalocasas/vocalika/compare/v0.3.0...v0.4.0) (2026-11-08)
+
+
+### Features
+
+* **projects:** search the song list, and call it "Your songs" ([3be54d9](https://github.com/gonzalocasas/vocalika/commit/3be54d9d8d5ae7c9326e50fee0e3082539ec06e3))
+* **projects:** search the song list, and call it "Your songs" ([c37c8d8](https://github.com/gonzalocasas/vocalika/commit/c37c8d8076008b607fb48918ea3a521db39cb4d1))
+
+
+### Bug Fixes
+
+* **analysis:** measure a second voice's level in what cancelling the first leaves ([1f27252](https://github.com/gonzalocasas/vocalika/commit/1f27252b0fb5a4de471905741fee67a13649b03a))
+* **practice:** split a sung leap where two steady notes fit it best ([1450677](https://github.com/gonzalocasas/vocalika/commit/14506771253d030d38b776ae0bfc8003e3221cad))
+
 ## [0.3.0](https://github.com/gonzalocasas/vocalika/compare/v0.2.2...v0.3.0) (2026-11-07)
 
 
