@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 
 import type { Project } from "../../shared/types"
 import ProjectWaveform from "./ProjectWaveform.vue"
+import { searchProjects } from "./projectSearch"
 import type { NewProjectInput } from "./useProjects"
 
 const props = defineProps<{ projects: Project[]; busy: boolean }>()
@@ -16,6 +17,31 @@ const title = ref("")
 const referenceFile = ref<File | null>(null)
 const referenceUrl = ref("")
 const referenceKind = ref<"mix" | "vocal" | "instrumental">("mix")
+const query = ref("")
+const searchInput = ref<HTMLInputElement | null>(null)
+const matches = computed(() => searchProjects(props.projects, query.value))
+const searching = computed(() => query.value.trim().length > 0)
+const count = (value: number) => String(value).padStart(2, "0")
+
+function clearSearch(): void {
+  query.value = ""
+  searchInput.value?.focus()
+}
+
+// "/" jumps to the search field from anywhere on the screen, unless the
+// singer is already typing somewhere.
+function focusSearch(event: KeyboardEvent): void {
+  if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return
+  const target = event.target as HTMLElement | null
+  if (target?.closest("input, textarea, select, [contenteditable='true']")) return
+  if (!searchInput.value) return
+  event.preventDefault()
+  searchInput.value.focus()
+}
+
+onMounted(() => window.addEventListener("keydown", focusSearch))
+onBeforeUnmount(() => window.removeEventListener("keydown", focusSearch))
+
 const canCreate = computed(() => sourceMode.value === "file"
   ? referenceFile.value !== null
   : referenceUrl.value.trim().length > 0)
@@ -46,32 +72,54 @@ function bestMae(project: Project): string {
   <section class="projects-view">
     <div class="projects-hero">
       <div>
-        <p class="mono-eyebrow accent-text">PROJECTS / {{ String(projects.length).padStart(2, "0") }}</p>
-        <h1>Reference<br />library</h1>
+        <p class="mono-eyebrow accent-text">
+          PROJECTS / {{ searching ? `${count(matches.length)} OF ${count(projects.length)}` : count(projects.length) }}
+        </p>
+        <h1>Your<br />songs</h1>
         <p>A project holds one reference song and every take you sing against it.</p>
       </div>
-      <button class="solid-button" @click="($refs.creator as HTMLElement)?.scrollIntoView({ behavior: 'smooth' })">
-        + NEW PROJECT
-      </button>
+      <div class="projects-actions">
+        <div v-if="projects.length" class="project-search">
+          <input
+            ref="searchInput"
+            v-model="query"
+            class="graphite-input"
+            type="search"
+            placeholder="Search songs and lyrics"
+            aria-label="Search projects"
+            @keydown.esc="query = ''"
+          />
+          <kbd v-if="!searching" aria-hidden="true">/</kbd>
+        </div>
+        <button class="solid-button" @click="($refs.creator as HTMLElement)?.scrollIntoView({ behavior: 'smooth' })">
+          + NEW PROJECT
+        </button>
+      </div>
     </div>
 
-    <div v-if="projects.length" class="project-list">
+    <div v-if="matches.length" class="project-list">
       <button
-        v-for="(project, index) in projects"
+        v-for="{ project, index, lyricsOnly } in matches"
         :key="project.id"
         class="project-row"
         @click="emit('open', project)"
       >
         <div class="project-copy">
-          <span class="mono-muted">{{ String(index + 1).padStart(2, "0") }}</span>
+          <span class="mono-muted">{{ count(index + 1) }}</span>
           <strong>{{ project.title }}</strong>
-          <small>{{ project.reference.source_url || project.reference.title }}</small>
+          <small>
+            <span v-if="lyricsOnly" class="search-hit">IN THE LYRICS · </span>{{ project.reference.source_url || project.reference.title }}
+          </small>
         </div>
         <ProjectWaveform :project-id="project.id" />
         <div class="project-stat"><span>TAKES</span><strong>{{ String(project.takes.length).padStart(2, "0") }}</strong></div>
         <div class="project-stat"><span>BEST MAE</span><strong class="accent-text">{{ bestMae(project) }}</strong></div>
       </button>
     </div>
+    <p v-else-if="searching" class="empty-copy">
+      Nothing matches “{{ query.trim() }}”.
+      <button class="text-button" @click="clearSearch">Clear the search</button>
+    </p>
     <p v-else class="empty-copy">No projects yet. Prepare a reference to start your workspace.</p>
 
     <section ref="creator" class="project-creator">
