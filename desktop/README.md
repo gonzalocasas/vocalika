@@ -143,9 +143,47 @@ Releases are cut by [Release Please](https://github.com/googleapis/release-pleas
    `Cargo.toml` and both `package.json` files together.
 2. Merging that pull request tags the release and publishes it.
 3. The same workflow then builds the installers on macOS (Apple Silicon)
-   and Windows, and attaches them to the release: `Vocalika_<version>_aarch64.dmg`
-   and `Vocalika_<version>_x64-setup.exe`.
+   and Windows, and attaches them to the release under fixed names,
+   `Vocalika-macOS-AppleSilicon.dmg` and `Vocalika-Windows-x64-setup.exe`,
+   so `.../releases/latest/download/<name>` always gets the newest.
+4. It also attaches each platform's signed update (on macOS the app bundle
+   as `Vocalika-macOS-AppleSilicon.app.tar.gz`; on Windows the installer
+   itself) with its `.sig`, and last `latest.json`
+   ([update_manifest.py](update_manifest.py)), which installed apps read.
 
 To rebuild the installers of an existing release, run the workflow by hand
 with its tag. Intel Macs are not a target: numba, llvmlite and sphn publish
 no x86_64 macOS wheels at the locked versions.
+
+## Updates
+
+Once the app is running, the launcher asks
+`https://github.com/gonzalocasas/vocalika/releases/latest/download/latest.json`
+for a newer version ([tauri-plugin-updater](https://v2.tauri.app/plugin/updater/)),
+downloads it in the background and tells the page, which shows **Restart
+to update** in the top bar. **Later** installs it on quit instead. Offline,
+or with GitHub unreachable, nothing is shown and the next launch tries
+again. The first start of the new version rebuilds the Python environment,
+as any update does (see above).
+
+The page is served by the local server, so to Tauri it is a remote origin:
+[capabilities/local-server.json](src-tauri/capabilities/local-server.json)
+lets `http://127.0.0.1:*` call only `update_ready` and `install_update`.
+
+An update installs only if it is signed with the release key and the
+signature names the version `latest.json` announces (`requireSignedVersion`,
+so an old release cannot be passed off as a new one). The public key is in
+`tauri.conf.json`. The private key and its password are the repository
+secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`,
+with a copy kept outside GitHub. **If the key is lost, installed apps can
+no longer update**: everyone would have to install the next version by hand,
+and that version would carry a new key.
+
+Only CI signs, so local `tauri build`s need no key: the workflow switches on
+`createUpdaterArtifacts` with `--config`. To try an update end to end
+locally, build two versions with a throwaway key
+(`npx tauri signer generate --ci -p "" -w test.key`), passing
+`--config` with that `pubkey`, an `http://127.0.0.1` endpoint,
+`dangerousInsecureTransportProtocol: true` and another `identifier` (so the
+real install's data is left alone); serve the newer `.app.tar.gz` and a
+`latest.json` pointing at it, and run the older app.

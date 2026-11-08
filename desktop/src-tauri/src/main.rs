@@ -6,6 +6,10 @@
 //! it then runs `vocalika serve` on a free local port and points its window
 //! at it. Rebuilding happens whenever the bundled stamp (a hash of the lock
 //! export and wheel) differs from the one recorded by the last good install.
+//!
+//! Once the app is up, the launcher looks for a newer release, downloads it
+//! in the background and tells the page, which offers to restart into it.
+//! Declined, it installs on quit instead.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -20,6 +24,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
+use tauri_plugin_updater::{Update, UpdaterExt};
 
 const PYTHON_VERSION: &str = "3.12";
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(180);
@@ -30,6 +35,21 @@ const PREFERRED_PORT: u16 = 47_615;
 struct Launcher {
     server: Mutex<Option<Child>>,
     busy: Mutex<bool>,
+    /// Whether this run has looked for an update yet: once is enough.
+    update_checked: Mutex<bool>,
+    /// A newer release, downloaded and verified, waiting to be installed.
+    update: Mutex<Option<ReadyUpdate>>,
+}
+
+struct ReadyUpdate {
+    update: Update,
+    bytes: Vec<u8>,
+}
+
+/// What the page shows about a downloaded update.
+#[derive(Clone, serde::Serialize)]
+struct UpdateNotice {
+    version: String,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -115,10 +135,14 @@ fn spawn_launch(app: AppHandle, repair: bool) {
         *busy = true;
     }
     thread::spawn(move || {
-        if let Err(message) = launch(&app, repair) {
-            let _ = app.emit("failed", message);
-        }
+        let launched = launch(&app, repair);
         *app.state::<Launcher>().busy.lock().unwrap() = false;
+        match launched {
+            Ok(()) => look_for_update(app),
+            Err(message) => {
+                let _ = app.emit("failed", message);
+            }
+        }
     });
 }
 
@@ -366,15 +390,92 @@ fn stop_server(app: &AppHandle) {
     }
 }
 
+/// Look for a newer release once the app is up, and download it quietly.
+///
+/// Only after the server is running, so a first install never competes with
+/// it for the network. Any failure (offline, GitHub unreachable, a bad
+/// signature) is logged and otherwise ignored: the app works without it,
+/// and the next launch tries again.
+fn look_for_update(app: AppHandle) {
+    {
+        let launcher: State<Launcher> = app.state();
+        let mut checked = launcher.update_checked.lock().unwrap();
+        if *checked {
+            return;
+        }
+        *checked = true;
+    }
+    tauri::async_runtime::spawn(async move {
+        let found = async {
+            let Some(update) = app.updater()?.check().await? else {
+                return Ok(None);
+            };
+            println!("update {} found; downloading", update.version);
+            let bytes = update.download(|_, _| {}, || {}).await?;
+            Ok::<_, tauri_plugin_updater::Error>(Some(ReadyUpdate { update, bytes }))
+        }
+        .await;
+        match found {
+            Ok(Some(ready)) => {
+                let notice = UpdateNotice { version: ready.update.version.clone() };
+                *app.state::<Launcher>().update.lock().unwrap() = Some(ready);
+                println!("update {} ready", notice.version);
+                let _ = app.emit("update-ready", notice);
+            }
+            Ok(None) => println!("no update available"),
+            Err(error) => println!("update check failed: {error}"),
+        }
+    });
+}
+
+/// The downloaded update, if any. The page asks on load, in case the
+/// download finished before it was listening.
+#[tauri::command]
+fn update_ready(app: AppHandle) -> Option<UpdateNotice> {
+    let launcher: State<Launcher> = app.state();
+    let update = launcher.update.lock().unwrap();
+    update.as_ref().map(|ready| UpdateNotice { version: ready.update.version.clone() })
+}
+
+/// Install the downloaded update now and come back in the new version.
+#[tauri::command]
+fn install_update(app: AppHandle) -> Result<(), String> {
+    let ready = app.state::<Launcher>().update.lock().unwrap().take();
+    let Some(ready) = ready else {
+        return Err("No update has been downloaded.".into());
+    };
+    // On Windows, install() hands over to the installer and exits the
+    // process without the usual exit event, so stop the server first: its
+    // files would otherwise be locked against the installer.
+    stop_server(&app);
+    ready.update.install(&ready.bytes).map_err(|e| e.to_string())?;
+    // macOS: the bundle has been replaced in place; start it.
+    app.restart();
+}
+
+/// Declined updates install on quit, so the next launch is the new version.
+fn install_on_quit(app: &AppHandle) {
+    let ready = app.state::<Launcher>().update.lock().unwrap().take();
+    if let Some(ready) = ready {
+        // The singer chose to quit: do not reopen the app after installing.
+        let update = ready.update.restart_after_install(false);
+        if let Err(error) = update.install(&ready.bytes) {
+            println!("installing the update on quit failed: {error}");
+        }
+    }
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Launcher::default())
-        .invoke_handler(tauri::generate_handler![start, repair])
+        .invoke_handler(tauri::generate_handler![start, repair, update_ready, install_update])
         .build(tauri::generate_context!())
         .expect("error while building the Vocalika launcher")
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 stop_server(app);
+                install_on_quit(app);
             }
         });
 }

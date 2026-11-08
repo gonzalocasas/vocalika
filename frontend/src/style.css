@@ -27,6 +27,15 @@ audio { display:none; }
 .header-logo { width:auto; height:36px; object-fit:contain; }
 .top-bar span { color:#7c817f; letter-spacing:.06em; }
 .top-bar i { width:7px; height:7px; border-radius:50%; background:var(--secondary); }
+.update-notice { display:flex; align-items:center; gap:10px; margin-right:12px; padding-right:16px; border-right:1px solid #33383a; }
+.top-bar .update-notice span { color:var(--accent); letter-spacing:.12em; }
+.update-notice b { color:#e8a09a; font-weight:500; }
+.update-notice button { border:0; border-radius:6px; padding:5px 10px; cursor:pointer; font:500 10px "IBM Plex Mono",monospace; letter-spacing:.12em; }
+.update-restart { background:var(--accent); color:var(--surface); }
+.update-restart:hover:not(:disabled) { filter:brightness(1.1); }
+.update-later { background:transparent; color:#7c817f; }
+.update-later:hover:not(:disabled) { color:var(--accent); }
+.update-notice button:disabled { opacity:.6; cursor:default; }
 main { width:min(1180px,calc(100% - 48px)); margin:0 auto; padding:36px 0 120px; }
 main.projects-page { padding-top:64px; }
 h1,h2,h3,p { margin-top:0; }
