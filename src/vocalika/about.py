@@ -140,7 +140,11 @@ def license_texts(name: str) -> list[dict[str, str]]:
     """
     if name == "Python":
         path = _python_license_file()
-        return [{"file": path.name, "text": path.read_text(errors="replace")}] if path else []
+        return (
+            [{"file": path.name, "text": path.read_text(encoding="utf-8", errors="replace")}]
+            if path
+            else []
+        )
     wanted = canonicalize_name(name)
     for dist in _dependencies():
         if canonicalize_name(dist.metadata["Name"]) != wanted:
@@ -151,7 +155,9 @@ def license_texts(name: str) -> list[dict[str, str]]:
                 continue
             path = Path(str(dist.locate_file(file)))
             if path.is_file():
-                texts.append({"file": file.name, "text": path.read_text(errors="replace")})
+                texts.append(
+                    {"file": file.name, "text": path.read_text(encoding="utf-8", errors="replace")}
+                )
         if not texts:
             # The license text in the metadata field, where some packages put it.
             declared = (dist.metadata.get("License") or "").strip()
@@ -166,7 +172,7 @@ def _launcher_file() -> dict[str, Any] | None:
     path = os.environ.get("VOCALIKA_LAUNCHER_NOTICES")
     if not path or not Path(path).is_file():
         return None
-    notices: dict[str, Any] = json.loads(Path(path).read_text())
+    notices: dict[str, Any] = json.loads(Path(path).read_text(encoding="utf-8"))
     return notices
 
 
