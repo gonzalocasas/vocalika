@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/gonzalocasas/vocalika/compare/v0.4.0...v0.4.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **lyrics:** time lyrics written in other scripts by romanizing them ([1d88f10](https://github.com/gonzalocasas/vocalika/commit/1d88f10439fa0aaade709cd83f8144c8bee445e8))
+
 ## [0.4.0](https://github.com/gonzalocasas/vocalika/compare/v0.3.0...v0.4.0) (2026-11-08)
 
 
