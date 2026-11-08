@@ -49,10 +49,13 @@ PATH_TOLERANCES: dict[str, float] = {
     "comparison.frames.confidence": 0.02,
     "comparison.frames.performance_confidence": 0.02,
     "comparison.frames.reference_confidence": 0.02,
-    "comparison.frames.performance_midi": 3e-3,
-    "comparison.frames.reference_midi": 3e-3,
-    "comparison.frames.absolute_error_cents": 0.5,
-    "comparison.frames.relative_error_cents": 0.5,
+    # One frame of the shared reference melody (143) comes out 0.62 c apart
+    # on different CI machines; a frame may move up to a cent, while the
+    # summaries below, over every frame, stay within a quarter cent.
+    "comparison.frames.performance_midi": 0.01,
+    "comparison.frames.reference_midi": 0.01,
+    "comparison.frames.absolute_error_cents": 1.0,
+    "comparison.frames.relative_error_cents": 1.0,
     "comparison.stable_pitch_regions.confidence": 2e-3,
     "comparison.stable_pitch_regions.performance_center_midi": 2e-3,
     "comparison.stable_pitch_regions.reference_center_midi": 2e-3,
