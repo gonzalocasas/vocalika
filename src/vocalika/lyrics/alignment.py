@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import re
 import threading
 import unicodedata
@@ -45,7 +46,10 @@ class LyricWord:
     text: str
     """The word as written, punctuation included, for display."""
     token: str
-    """Lowercase a-z and apostrophes: what the acoustic model can spell."""
+    """Lowercase a-z and apostrophes: what the acoustic model can spell.
+
+    Words in another script are romanized first, so "χελιδόνι" is aligned as
+    "chelidoni"."""
 
 
 @dataclass(frozen=True)
@@ -62,16 +66,38 @@ class WordTiming:
     score: float
 
 
+def _fold(text: str) -> str:
+    folded = unicodedata.normalize("NFKD", text.lower())
+    return "".join(char for char in folded if not unicodedata.combining(char))
+
+
+def needs_romanizing(text: str) -> bool:
+    """Whether ``text`` has letters that folding accents cannot bring to a-z."""
+    return any(char.isalpha() and not char.isascii() for char in _fold(text))
+
+
+@functools.cache
+def _romanizer() -> Any:
+    import uroman
+
+    return uroman.Uroman()
+
+
 def spell(word: str) -> str:
     """Reduce a written word to the alphabet the aligner was trained on.
 
     Accents are folded rather than dropped, so "canción" is aligned as
-    "cancion" instead of "cancin". Digits and other scripts have no spelling
-    here and come back empty; those words stay on screen, just untimed.
+    "cancion" instead of "cancin". Any other script -- Greek, Cyrillic,
+    Hebrew, Arabic, kana, and so on -- is romanized with uroman, the
+    romanizer the MMS aligner was trained through, so "χελιδόνι" is aligned
+    as "chelidoni". Before this, such words came back empty and a Greek song
+    had nothing timed at all; romanized, every word of one was, with line
+    starts a median 0.2 s from hand-made timestamps. Digits have no spelling
+    and come back empty; those words stay on screen, just untimed.
     """
-    folded = unicodedata.normalize("NFKD", word.lower())
-    folded = "".join(char for char in folded if not unicodedata.combining(char))
-    folded = folded.replace("’", "'").replace("‘", "'")
+    if needs_romanizing(word):
+        word = _romanizer().romanize_string(word)
+    folded = _fold(word).replace("’", "'").replace("‘", "'")
     return re.sub(r"[^a-z']", "", folded).strip("'")
 
 
@@ -241,8 +267,8 @@ def align_lyrics(audio_path: Path, lyrics: str, aligner: LyricsAligner) -> dict[
 
     The result keeps one entry per line of the input, so a client can render
     the text exactly as typed and look timings up by position. Lines with
-    nothing to align -- blanks, section labels, words in another script --
-    carry null times.
+    nothing to align -- blanks, section labels, a line of digits -- carry
+    null times.
     """
     lines = parse_lyrics(lyrics)
     spelled: list[str] = []

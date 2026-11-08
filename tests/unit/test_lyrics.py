@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -7,11 +9,14 @@ import numpy as np
 import soundfile as sf
 
 from vocalika.api.lyrics import build_lyrics_timing
+from vocalika.audio.sources import LocalAudioSource
 from vocalika.cache.manager import CacheManager
 from vocalika.lyrics.alignment import (
+    ALIGNMENT_VERSION,
     WordTiming,
     align_lyrics,
     is_section_label,
+    needs_romanizing,
     parse_lyrics,
     spell,
 )
@@ -37,6 +42,34 @@ def test_spelling_folds_accents_and_drops_what_the_model_cannot_spell() -> None:
     assert spell("Don’t") == "don't"
     assert spell("'cause") == "cause"
     assert spell("1984") == ""
+
+
+def test_other_scripts_are_romanized_the_way_the_aligner_was_trained() -> None:
+    """A Greek song used to have every word dropped, and nothing timed."""
+    assert spell("χελιδόνι") == "chelidoni"
+    assert spell("Νταλάρας,") == "dalaras"
+    assert spell("Москва") == "moskva"
+    assert spell("こんにちは") == "konnichiha"
+    assert spell("straße") == "strasse"
+
+
+def test_latin_words_are_spelled_exactly_as_before_romanizing_existed() -> None:
+    for word in ("Canción,", "Don’t", "naïve", "über", "Ça"):
+        assert not needs_romanizing(word), word
+    assert spell("über") == "uber"
+
+
+def test_a_greek_line_is_sung() -> None:
+    [line] = parse_lyrics("Αχ χελιδόνι μου πώς να πετάξεις")
+    assert line.sung
+    assert [word.token for word in line.words] == [
+        "ach",
+        "chelidoni",
+        "mou",
+        "pos",
+        "na",
+        "petaxeis",
+    ]
 
 
 def test_section_labels_are_told_apart_from_bracketed_singing() -> None:
@@ -108,6 +141,33 @@ def test_timing_is_cached_per_lyric_text(tmp_path: Path) -> None:
 
     assert first == second
     assert len(aligner.calls) == 2
+
+
+def test_lyrics_in_another_script_are_re_timed_but_latin_ones_are_not(tmp_path: Path) -> None:
+    """A result cached before romanizing must not hide a Greek song again.
+
+    Its old entry timed nothing; keying romanized lyrics apart re-times it.
+    Latin lyrics keep their key, so those songs are not re-timed for nothing.
+    """
+    cache = CacheManager(tmp_path / "cache")
+    aligner = FakeAligner()
+    stale = {"version": ALIGNMENT_VERSION, "aligner": aligner.name, "lines": ["stale"]}
+    for lyrics, re_timed in (("one two", False), ("ένα δύο", True)):
+        project = make_project(tmp_path, lyrics)
+        asset = LocalAudioSource(Path(project.reference.vocal_path or "")).acquire()
+        old_key = {
+            "lyrics_sha256": hashlib.sha256(lyrics.encode()).hexdigest(),
+            "aligner": aligner.name,
+            "version": ALIGNMENT_VERSION,
+        }
+        old_path = cache.lyrics_timing_path(asset.content_hash, old_key)
+        old_path.parent.mkdir(parents=True, exist_ok=True)
+        old_path.write_text(json.dumps(stale))
+
+        result = build_lyrics_timing(project, cache, aligner=aligner)
+
+        assert (result["lines"] != ["stale"]) is re_timed, lyrics
+    assert len(aligner.calls) == 1
 
 
 def test_empty_lyrics_skip_the_aligner(tmp_path: Path) -> None:
