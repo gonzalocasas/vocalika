@@ -74,6 +74,7 @@ def launcher_notices(uv: Path) -> dict[str, object]:
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     ).stdout
     data = json.loads(output)
     by_id = {package["id"]: package for package in data["packages"]}
@@ -100,7 +101,7 @@ def launcher_notices(uv: Path) -> dict[str, object]:
     for package in sorted((by_id[i] for i in shipped), key=lambda p: (p["name"], p["version"])):
         folder = Path(package["manifest_path"]).parent
         licenses = [
-            {"file": path.name, "text": keep(path.read_text(errors="replace"))}
+            {"file": path.name, "text": keep(path.read_text(encoding="utf-8", errors="replace"))}
             for path in sorted(folder.iterdir())
             if path.is_file() and LICENSE_FILE.match(path.name)
         ]
@@ -114,7 +115,7 @@ def launcher_notices(uv: Path) -> dict[str, object]:
             }
         )
     version = subprocess.run(
-        [str(uv), "--version"], check=True, capture_output=True, text=True
+        [str(uv), "--version"], check=True, capture_output=True, text=True, encoding="utf-8"
     ).stdout.split()[1]
     packages.insert(
         0,
@@ -132,7 +133,11 @@ def launcher_notices(uv: Path) -> dict[str, object]:
 
 def host_target() -> str:
     for line in subprocess.run(
-        [shutil.which("rustc") or "rustc", "-vV"], check=True, capture_output=True, text=True
+        [shutil.which("rustc") or "rustc", "-vV"],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     ).stdout.splitlines():
         if line.startswith("host: "):
             return line.removeprefix("host: ")
@@ -163,7 +168,7 @@ def main() -> None:
     # The launcher shells out to this uv, never to one on the user's PATH.
     shutil.copy2(which("uv", "VOCALIKA_UV"), RESOURCES / f"uv{EXE}")
     notices = launcher_notices(RESOURCES / f"uv{EXE}")
-    (RESOURCES / "launcher-notices.json").write_text(json.dumps(notices))
+    (RESOURCES / "launcher-notices.json").write_text(json.dumps(notices), encoding="utf-8")
     print(f"Listed {len(notices['packages'])} launcher components for the About page.")
 
     # One stamp for "this installer's environment": any change to the locked
