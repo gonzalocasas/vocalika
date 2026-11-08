@@ -4,6 +4,7 @@ Positive offset means the take contains extra lead-in: read take[t + offset].
 DTW and vocal-envelope similarity measure performance, not capture latency.
 Never use them to move recorded audio, even when their scores look confident.
 """
+
 from __future__ import annotations
 
 import math
@@ -62,11 +63,13 @@ def resolve_timing(take: Take) -> PlaybackTiming:
             alignment = _offset_evidence(Path(take.analysis_path))
     # Only direct waveform identity or a guarded spectral phrase match can
     # establish imported audio placement. Old spectral searches were unguarded.
-    candidates = [{
-        "method": alignment.get("global_offset_method"),
-        "seconds": alignment.get("global_offset_seconds"),
-        "confidence": alignment.get("global_offset_confidence"),
-    }]
+    candidates = [
+        {
+            "method": alignment.get("global_offset_method"),
+            "seconds": alignment.get("global_offset_seconds"),
+            "confidence": alignment.get("global_offset_confidence"),
+        }
+    ]
     if alignment.get("timing_estimator_version", 0) >= 2:
         candidates.extend(alignment.get("global_offset_candidates", []))
     for candidate in candidates:
@@ -77,10 +80,16 @@ def resolve_timing(take: Take) -> PlaybackTiming:
         )
         offset = candidate.get("seconds")
         confidence = candidate.get("confidence")
-        if (trusted_method and isinstance(offset, (int, float)) and math.isfinite(offset)
-                and isinstance(confidence, (int, float)) and 0.9 <= confidence <= 1.0):
+        if (
+            trusted_method
+            and isinstance(offset, (int, float))
+            and math.isfinite(offset)
+            and isinstance(confidence, (int, float))
+            and 0.9 <= confidence <= 1.0
+        ):
             return PlaybackTiming(float(offset), "audio-match", "Using a verified audio match.")
     return PlaybackTiming(
-        0.0, "original",
+        0.0,
+        "original",
         "Original timing preserved. Automatic alignment could not verify a recording offset.",
     )

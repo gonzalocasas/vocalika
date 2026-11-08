@@ -162,13 +162,15 @@ uv sync --extra dev --extra real-input
 uv run ruff check src tests
 uv run ruff format --check src tests
 uv run mypy
-uv run pytest
+uv run python scripts/fetch_open_datasets.py   # once: the open test datasets
+uv run pytest                                  # or -m "not open_data" without them
 npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
-Pitch accuracy is also checked against the Vocadito and MAST melody open
-datasets; see [Open test datasets](docs/OPEN_DATASETS.md). The design is
+Pitch tracking, voice choice, comparison and practice scoring are also
+checked against human-verified annotations in the Vocadito, MAST melody and
+Choral Singing open datasets; see [Open test datasets](docs/OPEN_DATASETS.md). The design is
 described in the [product requirements](docs/PRD-001-MVP.md) and the
 [feature architecture](docs/FEATURE_ARCHITECTURE.md).
 

@@ -123,14 +123,35 @@ def test_empty_lyrics_skip_the_aligner(tmp_path: Path) -> None:
 
 def test_lrclib_ranking_prefers_the_matching_song_over_a_closer_duration() -> None:
     rows = [
-        {"id": 1, "trackName": "HV123 - GRAVITY", "artistName": "GRAVITY", "duration": 248.0,
-         "plainLyrics": "karaoke text"},
-        {"id": 2, "trackName": "Gravity", "artistName": "John Mayer", "duration": 245.0,
-         "plainLyrics": "Gravity is working against me"},
-        {"id": 3, "trackName": "Gravity", "artistName": "John Mayer", "duration": 246.0,
-         "plainLyrics": "Gravity is working against me"},
-        {"id": 4, "trackName": "Gravity", "artistName": "John Mayer", "duration": 245.0,
-         "plainLyrics": None, "instrumental": True},
+        {
+            "id": 1,
+            "trackName": "HV123 - GRAVITY",
+            "artistName": "GRAVITY",
+            "duration": 248.0,
+            "plainLyrics": "karaoke text",
+        },
+        {
+            "id": 2,
+            "trackName": "Gravity",
+            "artistName": "John Mayer",
+            "duration": 245.0,
+            "plainLyrics": "Gravity is working against me",
+        },
+        {
+            "id": 3,
+            "trackName": "Gravity",
+            "artistName": "John Mayer",
+            "duration": 246.0,
+            "plainLyrics": "Gravity is working against me",
+        },
+        {
+            "id": 4,
+            "trackName": "Gravity",
+            "artistName": "John Mayer",
+            "duration": 245.0,
+            "plainLyrics": None,
+            "instrumental": True,
+        },
     ]
 
     ranked = rank_candidates(rows, "Gravity John Mayer", 248.0)

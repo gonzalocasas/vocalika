@@ -71,8 +71,8 @@ and PENN needs a newer torch:
 uv venv bench-env && VIRTUAL_ENV=bench-env uv pip install -e ".[real-input]" torchcrepe torchfcpe mir_eval matplotlib
 uv venv -p 3.11 bp-env && VIRTUAL_ENV=bp-env uv pip install basic-pitch "setuptools<81"
 uv run python scripts/fetch_open_datasets.py vocadito
-# Choral Singing Dataset (Zenodo 2649950, CC BY 4.0) unpacked into
-# tests/external-data/csd/; RMVPE weights in tests/external-data/models/.
+uv run python scripts/fetch_open_datasets.py csd  # Zenodo 2649950, CC BY-NC 4.0
+# RMVPE weights in tests/external-data/models/.
 BASIC_PITCH_PYTHON=bp-env/bin/python bench-env/bin/python bench/pitch/run.py
 bench-env/bin/python bench/pitch/audit.py --plot <project_id>:30-48
 ```

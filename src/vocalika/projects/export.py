@@ -250,7 +250,10 @@ class ProjectExportService:
         # its VBR quality from global_quality, in units of FF_QP2LAMBDA (118).
         try:
             media.encode(
-                audio, self.sample_rate, destination, codec="libmp3lame",
+                audio,
+                self.sample_rate,
+                destination,
+                codec="libmp3lame",
                 options={"flags": "+qscale", "global_quality": str(2 * 118)},
             )
         except AudioDecodeError as error:

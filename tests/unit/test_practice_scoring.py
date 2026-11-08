@@ -8,6 +8,7 @@ import soundfile as sf
 
 from vocalika.practice.scoring import (
     STEADINESS_LIMIT_CENTS,
+    leap_split,
     score_held_note,
     score_interval,
     verdict_for,
@@ -191,3 +192,48 @@ def test_leaping_the_wrong_way_is_flagged_as_such(tmp_path: Path) -> None:
     assert result["wrong_direction"] is True
     assert abs(result["width_error_cents"]) < 100, "the size was about right"
     assert result["verdict"] == "off", "but it still has to fail"
+
+
+def _legato_leap(vibrato_cents: float, glide_seconds: float) -> np.ndarray:
+    """A pitch track (MIDI, 100 frames/s): 1.2 s of G3, a glide, 1.2 s of A3.
+
+    The first note's vibrato starts at ``vibrato_cents`` and settles to a
+    third of it, so its widest swing comes early in the note.
+    """
+    frames = 100
+    depth = np.linspace(vibrato_cents, vibrato_cents / 3, 120) / 100
+    first = 55.0 + depth * np.sin(2 * np.pi * 5.0 * np.arange(120) / frames)
+    glide = np.linspace(55.0, 57.0, int(glide_seconds * frames), endpoint=False)
+    second = 57.0 + 0.1 * np.sin(2 * np.pi * 5.0 * np.arange(120) / frames)
+    return np.concatenate([first, glide, second])
+
+
+def _sung_semitones(span: np.ndarray) -> float:
+    split = leap_split(span)
+    first, second = span[:split], span[split:]
+    return float(np.nanmedian(second) - np.nanmedian(first))
+
+
+def test_a_legato_leap_is_split_at_the_glide_not_at_a_vibrato_swing() -> None:
+    """Wide vibrato moves faster frame to frame than a slow glide does.
+
+    +-80 cents at 5 Hz swings up to 25 cents a frame; gliding a whole tone
+    over half a second moves 4. A split at the largest single move lands a
+    third of the way into the first note, and leaves the rest of it to be
+    counted as the second; on real legato leaps in the Choral Singing
+    Dataset that read a correct leap up to five semitones off. The two-note
+    fit must find the glide. (The glide's own frames still pull each note's
+    median a little, which is how the scorer measures a glide, not where it
+    splits.)
+    """
+    span = _legato_leap(vibrato_cents=80.0, glide_seconds=0.5)
+    split = leap_split(span)
+    assert 120 <= split <= 170, f"split at frame {split}, outside the glide"
+    assert abs(_sung_semitones(span) - 2.0) < 0.35
+
+
+def test_a_brief_octave_slip_does_not_move_the_leap_split() -> None:
+    span = _legato_leap(vibrato_cents=30.0, glide_seconds=0.2)
+    span[20:26] = 43.0  # six frames an octave low, early in the first note
+    span[60:64] = np.nan  # and a breath
+    assert abs(_sung_semitones(span) - 2.0) < 0.1

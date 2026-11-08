@@ -22,6 +22,7 @@ class Dataset:
     archive_name: str
     size_bytes: int
     md5: str
+    license: str = "CC-BY-4.0"
     nested_archives: tuple[str, ...] = ()
 
     @property
@@ -52,6 +53,17 @@ DATASETS = {
                 "f0data_crepe/MAST_melody_f0.zip",
                 "chroma/MAST_melody_chroma.zip",
             ),
+        ),
+        Dataset(
+            key="csd",
+            record_id=2649950,
+            title="Choral Singing Dataset",
+            archive_name="ChoralSingingDataset.zip",
+            size_bytes=1_071_185_446,
+            md5="7a9643609a1c3902b5255d78dbba3303",
+            # Non-commercial, unlike the other two: fine for tests that never
+            # redistribute it, but it must not ship in anything Vocalika sells.
+            license="CC-BY-NC-4.0",
         ),
     )
 }
@@ -142,7 +154,6 @@ def _extract(
             **asdict(dataset),
             "source_url": dataset.url,
             "record_url": f"https://zenodo.org/records/{dataset.record_id}",
-            "license": "CC-BY-4.0",
         }
         (temporary / ".vocalika-dataset.json").write_text(
             json.dumps(marker, indent=2) + "\n",
@@ -179,7 +190,7 @@ def fetch(dataset: Dataset, root: Path, *, keep_archives: bool) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Fetch pinned open datasets used by Vocalika's opt-in integration tests."
+        description="Fetch pinned open datasets used by Vocalika's open-data integration tests."
     )
     parser.add_argument(
         "datasets",

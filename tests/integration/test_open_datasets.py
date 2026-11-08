@@ -1,35 +1,30 @@
 from __future__ import annotations
 
 import csv
-import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-import librosa
 import numpy as np
 import pytest
 import soundfile as sf
+from open_data import (
+    DATA_ROOT,
+    dataset_root,
+    extract_clean,
+    frame_errors,
+    hz_to_midi,
+    load_mono,
+    octave_error_share,
+)
 
 from vocalika.analysis.alignment import align_pitch_tracks
-from vocalika.analysis.cleaning import clean_pitch_track
 from vocalika.analysis.comparison import ComparisonResult, compare_alignment
 from vocalika.analysis.pitch import PitchTrack
-from vocalika.config import AnalysisConfig
-
-DEFAULT_DATA_ROOT = Path(__file__).parents[1] / "external-data"
-DATA_ROOT = Path(os.environ.get("VOCALIKA_OPEN_DATA_DIR", DEFAULT_DATA_ROOT))
-FETCH_COMMAND = "uv run python scripts/fetch_open_datasets.py"
+from vocalika.audio.decode import decode_for_analysis
+from vocalika.practice.notes import segment_notes
+from vocalika.practice.scoring import score_held_note, verdict_for
 
 pytestmark = pytest.mark.open_data
-
-
-def _dataset_root(key: str) -> Path:
-    root = DATA_ROOT / key
-    if not (root / ".vocalika-dataset.json").is_file():
-        pytest.skip(f"optional dataset {key!r} is absent; fetch it with: {FETCH_COMMAND} {key}")
-    return root
-
 
 VOCADITO_BASELINE_PATH = Path(__file__).parent / "vocadito_pitch_baseline.csv"
 with VOCADITO_BASELINE_PATH.open(newline="", encoding="utf-8") as _source:
@@ -48,6 +43,7 @@ FRAMES_TOLERANCE_FACTOR = 0.8
 # looser factor and is asserted only for those. It exists to catch a regression
 # in the error tail, which the median cannot see.
 MEAN_CENTS_TOLERANCE_FACTOR = 1.4
+VOICING_RECALL_TOLERANCE = 0.03
 
 # Tracks on which the pitch track makes a few octave errors -- under 1% of
 # frames on each, against up to ~8% on the pyin it replaced. Kept as an
@@ -67,63 +63,57 @@ class VocaditoMeasurement:
     voicing_recall: float
 
 
-def _measure_vocadito_track(arguments: tuple[Path, int]) -> VocaditoMeasurement:
-    """Score one track through the production path against the published F0.
+def _vocadito_track(root: Path, track_id: int) -> PitchTrack:
+    """One track through the production reference path, exactly as a song gets it.
 
-    The reference extractor and the cleaning are exactly what a song gets in
-    the app -- second-voice search included, which on a solo recording must
-    change nothing.
+    Second-voice search included, which on a solo recording must change nothing.
     """
-    root, track_id = arguments
-    config = AnalysisConfig()
-    audio, sample_rate = librosa.load(
-        root / "Audio" / f"vocadito_{track_id}.wav", sr=16_000, mono=True
-    )
-    with tempfile.TemporaryDirectory() as directory:
-        resampled_path = Path(directory) / f"vocadito_{track_id}.wav"
-        sf.write(resampled_path, audio, sample_rate)
-        estimate = clean_pitch_track(
-            config.reference_extractor().extract(resampled_path), **config.cleaning_parameters()
-        )
+    return extract_clean(load_mono(root / "Audio" / f"vocadito_{track_id}.wav"))
 
+
+def _vocadito_f0(root: Path, track_id: int) -> tuple[np.ndarray, np.ndarray]:
     annotation = np.loadtxt(
         root / "Annotations" / "F0" / f"vocadito_{track_id}_f0.csv", delimiter=","
     )
-    right_indices = np.searchsorted(annotation[:, 0], estimate.times)
-    right_indices = np.clip(right_indices, 1, annotation.shape[0] - 1)
-    use_left = np.abs(annotation[right_indices - 1, 0] - estimate.times) < np.abs(
-        annotation[right_indices, 0] - estimate.times
-    )
-    expected_frequency = annotation[right_indices - use_left, 1]
-    estimated_frequency = config.concert_pitch_hz * 2.0 ** ((estimate.midi - 69.0) / 12.0)
-    confident = np.isfinite(estimated_frequency)
-    valid = confident & (expected_frequency > 0.0)
-    cents_error = np.abs(1200.0 * np.log2(estimated_frequency[valid] / expected_frequency[valid]))
-    annotated_voiced = expected_frequency > 0.0
+    return annotation[:, 0], annotation[:, 1]
+
+
+def _measure_vocadito_track(
+    arguments: tuple[Path, int], track: PitchTrack | None = None
+) -> VocaditoMeasurement:
+    """Score one track against the published F0."""
+    root, track_id = arguments
+    track = track if track is not None else _vocadito_track(root, track_id)
+    cents_error, voicing_recall = frame_errors(track, *_vocadito_f0(root, track_id))
     return VocaditoMeasurement(
         track_id=track_id,
-        frames=int(np.count_nonzero(valid)),
+        frames=int(cents_error.size),
         median_cents=float(np.median(cents_error)),
         mean_cents=float(np.mean(cents_error)),
         within_50=float(np.mean(cents_error <= 50.0)),
         within_25=float(np.mean(cents_error <= 25.0)),
-        # An octave error lands ~1200 cents away from the annotation.
-        octave_errors=float(np.mean(np.abs(cents_error - 1200.0) < 100.0)),
-        voicing_recall=float(np.mean(confident[annotated_voiced])),
+        octave_errors=octave_error_share(cents_error),
+        voicing_recall=voicing_recall,
     )
 
 
 @pytest.fixture(scope="session")
-def vocadito_measurements() -> dict[int, VocaditoMeasurement]:
-    """Score every vocadito track once and share the result across the module.
+def vocadito_tracks() -> dict[int, PitchTrack]:
+    """Every vocadito track's pitch, extracted once for the whole session.
 
     RMVPE runs the full 13.6 minutes of audio in well under a minute, so
-    tracks are measured in turn.
+    tracks are extracted in turn.
     """
-    root = _dataset_root("vocadito")
+    root = dataset_root("vocadito")
+    return {track_id: _vocadito_track(root, track_id) for track_id in sorted(VOCADITO_BASELINE)}
+
+
+@pytest.fixture(scope="session")
+def vocadito_measurements(vocadito_tracks: dict[int, PitchTrack]) -> dict[int, VocaditoMeasurement]:
+    root = dataset_root("vocadito")
     return {
-        track_id: _measure_vocadito_track((root, track_id))
-        for track_id in sorted(VOCADITO_BASELINE)
+        track_id: _measure_vocadito_track((root, track_id), track)
+        for track_id, track in vocadito_tracks.items()
     }
 
 
@@ -147,6 +137,9 @@ def test_vocadito_pitch_matches_frame_level_f0(
     assert measured.frames >= frames_floor
     assert measured.median_cents <= cents_ceiling
     assert measured.within_50 >= within_50_floor
+    # Recorded but long unasserted: a stricter voicing gate would pass every
+    # other bar here while silently dropping sung frames.
+    assert measured.voicing_recall >= float(baseline["voicing_recall"]) - VOICING_RECALL_TOLERANCE
     if track_id not in VOCADITO_OCTAVE_ERROR_TRACKS:
         assert measured.mean_cents <= float(baseline["mean_cents"]) * MEAN_CENTS_TOLERANCE_FACTOR
 
@@ -238,7 +231,7 @@ def _mast_unanimous_score(root: Path, performance_stem: str) -> float:
 
 
 def test_mast_expert_ratings_separate_perfect_and_completely_off_performances() -> None:
-    root = _dataset_root("mast-melody")
+    root = dataset_root("mast-melody")
     completely_off_stem = "59_mel1_per160759"
     perfect_stem = "55_mel1_per172159"
 
@@ -257,7 +250,7 @@ def test_mast_expert_ratings_separate_perfect_and_completely_off_performances() 
 
 
 def test_mast_unanimous_ratings_rank_across_the_paired_dataset() -> None:
-    root = _dataset_root("mast-melody")
+    root = dataset_root("mast-melody")
     f0_root = root / "f0data_crepe" / "MAST_melody_f0"
     annotations = root / "annotations" / "annotations.csv"
     scores: dict[int, list[float]] = {1: [], 4: []}
@@ -290,12 +283,200 @@ def test_mast_unanimous_ratings_rank_across_the_paired_dataset() -> None:
 
 
 def test_mast_melodic_motion_regression_case_aligns_correctly() -> None:
-    root = _dataset_root("mast-melody")
+    root = dataset_root("mast-melody")
 
     comparison = _mast_comparison(root, "55_mel2_per161659")
 
     assert comparison.relative_mean_absolute_error_cents < 50.0
     assert comparison.relative_within_50_percent > 75.0
+
+
+def test_mast_ratings_rank_takes_measured_by_vocalika(tmp_path: Path) -> None:
+    """The expert-rating benchmark again, with each sung take measured by Vocalika.
+
+    The tests above score MAST's published CREPE tracks, which checks
+    alignment and comparison but not the extractor. Here every performance
+    goes through the take path from its 8 kHz recording. The references stay
+    on the published track: they are piano, and Vocalika's references are
+    always a voice -- RMVPE, trained on singing, keeps only a fifth to a half
+    of a piano's frames, which is out of scope rather than a regression.
+    Measured: pairwise ranking accuracy 0.980, medians 32 and 136 cents.
+    """
+    root = dataset_root("mast-melody")
+    f0_root = root / "f0data_crepe" / "MAST_melody_f0"
+    audio_root = root / "audioFiles" / "MAST_melody_audio"
+    annotations = root / "annotations" / "annotations.csv"
+    scores: dict[int, list[float]] = {1: [], 4: []}
+
+    with annotations.open(newline="", encoding="utf-8") as source:
+        rows = list(csv.DictReader(source))
+    for row in rows:
+        if row["fullAgree_score"] not in {"1.0", "4.0"}:
+            continue
+        performance_stem = Path(row["file"]).stem
+        if "_per" not in performance_stem:
+            continue
+        reference_stem = performance_stem.replace("_per", "_ref", 1)
+        if not (f0_root / f"{reference_stem}.f0.npy").is_file():
+            continue
+        decoded = decode_for_analysis(audio_root / f"{performance_stem}.m4a", tmp_path / "take.wav")
+        performance = extract_clean(load_mono(decoded), "single")
+        comparison = compare_alignment(
+            align_pitch_tracks(_mast_track(root, reference_stem), performance)
+        )
+        scores[int(float(row["fullAgree_score"]))].append(
+            comparison.relative_mean_absolute_error_cents
+        )
+
+    completely_off = np.asarray(scores[1])
+    perfect = np.asarray(scores[4])
+    pairwise_ranking_accuracy = float(
+        np.mean(perfect[:, np.newaxis] < completely_off[np.newaxis, :])
+    )
+    assert completely_off.size == 197
+    assert perfect.size == 192
+    assert np.median(perfect) < 40.0
+    assert np.median(completely_off) > 120.0
+    assert pairwise_ranking_accuracy > 0.96
+
+
+def _vocadito_notes(root: Path, track_id: int, annotator: str) -> list[tuple[float, float, float]]:
+    """One annotator's notes as (start, end, MIDI)."""
+    rows = np.loadtxt(
+        root / "Annotations" / "Notes" / f"vocadito_{track_id}_notes{annotator}.csv",
+        delimiter=",",
+        ndmin=2,
+    )
+    return [
+        (start, start + length, float(hz_to_midi(np.array([hz]))[0])) for start, hz, length in rows
+    ]
+
+
+def _matched_cents(
+    note: tuple[float, float, float], candidates: list[tuple[float, float, float]]
+) -> float | None:
+    """Cents from ``note`` to the candidate covering most of it, if one covers over half."""
+    start, end, midi = note
+    best: tuple[float, float] | None = None
+    for other_start, other_end, other_midi in candidates:
+        overlap = min(end, other_end) - max(start, other_start)
+        if overlap > 0.5 * (end - start) and (best is None or overlap > best[0]):
+            best = (overlap, other_midi)
+    return None if best is None else 100.0 * (midi - best[1])
+
+
+def _note_agreement(
+    found: list[tuple[float, float, float]], annotated: list[tuple[float, float, float]]
+) -> tuple[list[bool], list[bool], list[float]]:
+    """Per found note: a real note at its pitch? Per long annotated note: found? And cents."""
+    found_hits, cents = [], []
+    for note in found:
+        error = _matched_cents(note, annotated)
+        found_hits.append(error is not None and abs(error) <= 50.0)
+        if error is not None:
+            cents.append(abs(error))
+    long_notes = [note for note in annotated if note[1] - note[0] >= 0.5]
+    recalled = []
+    for note in long_notes:
+        error = _matched_cents(note, found)
+        recalled.append(error is not None and abs(error) <= 50.0)
+    return found_hits, recalled, cents
+
+
+def test_vocadito_practice_notes_agree_with_human_transcriptions(
+    vocadito_tracks: dict[int, PitchTrack],
+) -> None:
+    """The notes offered for practice are real notes, at the pitch a transcriber heard.
+
+    Vocadito has two independent note transcriptions; the second annotator,
+    scored against the first the same way, shows what agreement between
+    people looks like. segment_notes is deliberately conservative -- it wants
+    whole notes steady enough to practise -- so it is held to human
+    precision and pitch but finds fewer of the annotated notes. Measured over
+    314 notes: 96% are real and within 2.0 cents (median) of the
+    transcription, against 94% for the second annotator; it recovers 70% of
+    the 209 notes of 0.5 s or longer, against 95% for the second annotator.
+    """
+    root = dataset_root("vocadito")
+    found_hits: list[bool] = []
+    recalled: list[bool] = []
+    cents: list[float] = []
+    human_hits: list[bool] = []
+    human_recalled: list[bool] = []
+    for track_id, track in vocadito_tracks.items():
+        first = _vocadito_notes(root, track_id, "A1")
+        found = [
+            (note.start_seconds, note.end_seconds, note.midi)
+            for note in segment_notes(track.times, track.midi)
+        ]
+        hits, recall, errors = _note_agreement(found, first)
+        found_hits += hits
+        recalled += recall
+        cents += errors
+        hits, recall, _ = _note_agreement(_vocadito_notes(root, track_id, "A2"), first)
+        human_hits += hits
+        human_recalled += recall
+
+    precision = float(np.mean(found_hits))
+    human_precision = float(np.mean(human_hits))
+    assert len(found_hits) > 250
+    assert precision > 0.92
+    assert precision > human_precision - 0.03
+    assert float(np.median(cents)) < 3.0
+    assert float(np.mean(recalled)) > 0.62
+    assert float(np.mean(human_recalled)) > 0.9
+
+
+def test_vocadito_held_notes_score_as_the_annotation_does(tmp_path: Path) -> None:
+    """The practice score of notes both transcribers agree on, sung by 29 amateurs.
+
+    A note counts when both annotators mark it, at least 0.8 s long, within
+    20 cents of each other. Its true centre and steadiness come from the
+    published F0 with the same 15% onset and release trim the scorer applies.
+    Measured over 55 notes: centre within 1.1 cents of the truth (median; 4.9
+    worst), and the verdict the annotation implies on 91% -- the rest on a
+    verdict boundary.
+    """
+    root = dataset_root("vocadito")
+    centre_errors, steadiness_errors, agreement = [], [], []
+    for track_id in sorted(VOCADITO_BASELINE):
+        first = _vocadito_notes(root, track_id, "A1")
+        second = _vocadito_notes(root, track_id, "A2")
+        times, frequency = _vocadito_f0(root, track_id)
+        audio, rate = sf.read(root / "Audio" / f"vocadito_{track_id}.wav")
+        for note in first:
+            start, end, midi = note
+            if end - start < 0.8:
+                continue
+            other = _matched_cents(note, second)
+            if other is None or abs(other) > 20.0:
+                continue
+            inside = (times >= start) & (times < end) & (frequency > 0.0)
+            values = hz_to_midi(frequency[inside])
+            margin = int(values.size * 0.15)
+            core = values[margin : values.size - margin]
+            if core.size < 20:
+                continue
+            target = float(np.round(midi))
+            clip = tmp_path / "note.wav"
+            sf.write(clip, audio[int(start * rate) : int(end * rate)], rate)
+            score = score_held_note(clip, target)
+            centre = float(np.median(core))
+            true_centre = 100.0 * (centre - target)
+            true_steadiness = 100.0 * float(np.mean(np.abs(core - centre)))
+            if score.centre_cents is None:
+                centre_errors.append(float("inf"))
+                continue
+            centre_errors.append(abs(score.centre_cents - true_centre))
+            steadiness_errors.append(abs(score.steadiness_cents - true_steadiness))
+            agreement.append(score.verdict == verdict_for(true_centre, true_steadiness))
+
+    centre = np.asarray(centre_errors)
+    assert centre.size > 50
+    assert float(np.median(centre)) < 2.0
+    assert float(np.max(centre)) < 10.0
+    assert float(np.percentile(steadiness_errors, 90)) < 4.0
+    assert float(np.mean(agreement)) > 0.85
 
 
 def _write_vocadito_baseline() -> None:

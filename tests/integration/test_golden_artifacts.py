@@ -27,16 +27,53 @@ with (FIXTURE_DIRECTORY / "README.csv").open(newline="", encoding="utf-8") as _s
     CASES = list(csv.DictReader(_source))
 
 # Every number in the artifact is derived deterministically from the audio, so
-# the only slack needed is for floating-point summation order.
+# on one platform the only slack needed is for floating-point summation order.
 RELATIVE_TOLERANCE = 1e-9
 ABSOLUTE_TOLERANCE = 1e-12
 
-# The pipeline is deterministic end to end, so the goldens are held to the
-# strict tolerance everywhere. If a future backend's resampler shifts the
-# offset estimators' correlation scores, loosen only those diagnostic paths
-# here -- `global_offset_seconds`, `_method`, and `_applied` should stay
-# strict so a drift large enough to change the selection still fails.
-PATH_TOLERANCES: dict[str, float] = {}
+# Across platforms it is not: torch's CPU kernels differ between Apple Silicon
+# and x86, so RMVPE's pitch and confidence move in the fourth decimal, and
+# everything computed from them follows. These bounds sit about five times
+# above the worst drift measured between macOS arm64 and Linux x86-64
+# (pitch 0.0006 semitones, cents 0.09, confidence 0.001; one frame of 150
+# crossing a percentage threshold). Frame pairing can also break a near-tie
+# at a note onset the other way, pairing a frame with its neighbour: one
+# 20 ms step, and that neighbour's confidence, which can differ by 0.01.
+# Everything else discrete stays strict -- which frames are voiced and
+# valid, every stable region's boundaries, the chosen offset and how it was
+# chosen -- so a real change still fails.
+FRAME_STEP_SECONDS = 0.02
+PATH_TOLERANCES: dict[str, float] = {
+    "comparison.frames.reference_time": FRAME_STEP_SECONDS + 1e-9,
+    "comparison.frames.performance_time": FRAME_STEP_SECONDS + 1e-9,
+    "comparison.frames.confidence": 0.02,
+    "comparison.frames.performance_confidence": 0.02,
+    "comparison.frames.reference_confidence": 0.02,
+    "comparison.frames.performance_midi": 3e-3,
+    "comparison.frames.reference_midi": 3e-3,
+    "comparison.frames.absolute_error_cents": 0.5,
+    "comparison.frames.relative_error_cents": 0.5,
+    "comparison.stable_pitch_regions.confidence": 2e-3,
+    "comparison.stable_pitch_regions.performance_center_midi": 2e-3,
+    "comparison.stable_pitch_regions.reference_center_midi": 2e-3,
+    "comparison.stable_pitch_regions.reference_span_cents": 0.02,
+    "comparison.stable_pitch_regions.error_cents": 0.25,
+    "comparison.stable_pitch_regions.relative_error_cents": 0.25,
+    "comparison.summary.global_bias_cents": 0.25,
+    "comparison.summary.mean_absolute_error_cents": 0.25,
+    "comparison.summary.median_absolute_error_cents": 0.25,
+    "comparison.summary.relative_mean_absolute_error_cents": 0.25,
+    "comparison.summary.relative_median_absolute_error_cents": 0.25,
+    "comparison.summary.stable_note_": 0.25,
+    "comparison.summary.relative_stable_note_": 0.25,
+    # One frame crossing a threshold moves a share by 100/frames points.
+    "comparison.summary.within_": 1.0,
+    "comparison.summary.relative_within_": 1.0,
+    # Diagnostic scores of the offsets considered; the choice stays strict.
+    "alignment.global_offset_candidates.raw_correlation": 1e-4,
+    "alignment.global_offset_candidates.peak_margin": 1e-5,
+    "alignment.global_offset_candidates.confidence": 1e-6,
+}
 
 
 @pytest.fixture(scope="module")
@@ -109,3 +146,15 @@ def test_goldens_cover_the_measurements_a_backend_must_reproduce(
     # The goldens are backend-agnostic: any implementation must record which
     # extractor produced the track, but the harness does not care which one.
     assert artifact["pitch"]["extractor"]
+
+
+def test_a_field_tolerance_covers_every_list_element_and_nothing_else() -> None:
+    expected = {"regions": [{"error_cents": 1.0, "start": 2.0}, {"error_cents": 3.0, "start": 4.0}]}
+    drifted = {"regions": [{"error_cents": 1.1, "start": 2.0}, {"error_cents": 2.9, "start": 4.0}]}
+    moved = {"regions": [{"error_cents": 1.0, "start": 2.1}, {"error_cents": 3.0, "start": 4.0}]}
+    tolerances = {"regions.error_cents": 0.25}
+
+    assert not list(compare_artifacts(expected, drifted, path_tolerances=tolerances))
+    assert list(compare_artifacts(expected, moved, path_tolerances=tolerances)) == [
+        "regions[0].start: 2.0 != 2.1"
+    ]

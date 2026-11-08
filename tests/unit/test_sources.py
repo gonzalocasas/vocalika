@@ -123,9 +123,6 @@ def test_youtube_source_retries_403_with_signed_embedded_client(
 
     assert len(calls) == 2
     assert calls[1][calls[1].index("--remote-components") + 1] == "ejs:github"
-    assert (
-        calls[1][calls[1].index("--extractor-args") + 1]
-        == "youtube:player_client=web_embedded"
-    )
+    assert calls[1][calls[1].index("--extractor-args") + 1] == "youtube:player_client=web_embedded"
     assert "--force-overwrites" in calls[1]
     assert asset.title == "Recovered reference"

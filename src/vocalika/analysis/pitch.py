@@ -102,7 +102,14 @@ class RmvpePitchExtractor:
             residual = voices.cancel_harmonics(audio, frequency, sample_rate, hop)
             second, second_confidence = self._track(residual)
             two = voices.separate_two_voices(
-                frequency, confidence, second, second_confidence, audio, sample_rate, hop
+                frequency,
+                confidence,
+                second,
+                second_confidence,
+                audio,
+                sample_rate,
+                hop,
+                residual=residual,
             )
             use_upper = (
                 voices.louder_is_upper(two, audio, sample_rate, hop)

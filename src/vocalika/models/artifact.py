@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,9 @@ SCHEMA_VERSION = "0.1.0"
 VOLATILE_KEYS = frozenset(
     {
         "created_at",
+        # Bumped by every release, analysis change or not; a change in the
+        # analysis shows up in the numbers, which is what goldens pin.
+        "pipeline_version",
         "provenance",
         "path",
         "analysis_audio",
@@ -60,14 +64,22 @@ def _close(left: float, right: float, *, relative: float, absolute: float) -> bo
     return math.isclose(left, right, rel_tol=relative, abs_tol=absolute)
 
 
+_INDEX = re.compile(r"\[\d+\]")
+
+
 def _tolerance_for(
     path: str,
     default: float,
     overrides: Mapping[str, float] | None,
 ) -> float:
-    """Absolute tolerance for one field, from any matching path prefix."""
+    """Absolute tolerance for one field, from any matching path prefix.
+
+    List indices are ignored, so ``comparison.stable_pitch_regions.error_cents``
+    covers that field of every region and leaves the regions' times strict.
+    """
     if not overrides:
         return default
+    path = _INDEX.sub("", path)
     matches = [value for prefix, value in overrides.items() if path.startswith(prefix)]
     return max(matches) if matches else default
 
