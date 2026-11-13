@@ -17,6 +17,16 @@ import TakesView from "./features/takes/TakesView.vue"
 import type { AnalysisArtifact, Project, StorageStatus, Take } from "./shared/types"
 import SettingsDialog from "./features/settings/SettingsDialog.vue"
 import UpdateNotice from "./features/update/UpdateNotice.vue"
+import type { Release } from "./features/whatsNew/changelog"
+import WhatsNewDialog from "./features/whatsNew/WhatsNewDialog.vue"
+import {
+  APP_VERSION,
+  currentRelease,
+  lastSeenVersion,
+  markVersionSeen,
+  releasesSinceLastSeen,
+} from "./features/whatsNew/whatsNew"
+import { audioDevices } from "./shared/audioDevices"
 
 const {
   projects,
@@ -34,14 +44,44 @@ const {
 } = useProjects()
 
 // The first start has no data folder yet: ask for one before anything else.
-const settingsMode = ref<"setup" | "settings" | null>(null)
+const settingsMode = ref<"setup" | "tour" | "settings" | null>(null)
+const settingsTab = ref<"storage" | "audio" | "about">("storage")
+// After an upgrade, the release notes since the version last opened, once.
+const whatsNew = ref<Release[] | null>(null)
+// Any pair measured counts: device names may not be known yet at start-up.
+const needsLatency = computed(() => Object.keys(audioDevices.latencies).length === 0)
+
 async function checkStorage(): Promise<void> {
   try {
     const status = await apiJson<StorageStatus>("/api/settings/storage")
-    if (!status.configured) settingsMode.value = "setup"
+    if (!status.configured) {
+      settingsMode.value = "setup"
+      // A new install is welcomed instead; its notes would only be noise.
+      markVersionSeen()
+    } else if (lastSeenVersion() !== APP_VERSION) {
+      const releases = releasesSinceLastSeen()
+      markVersionSeen()
+      if (releases.length) whatsNew.value = releases
+    }
   } catch {
     // An unreachable server already shows its own error on the project list.
   }
+}
+
+function openSettings(tab: "storage" | "audio" | "about" = "storage"): void {
+  whatsNew.value = null
+  settingsTab.value = tab
+  settingsMode.value = "settings"
+}
+
+function openTour(): void {
+  whatsNew.value = null
+  settingsMode.value = "tour"
+}
+
+function openWhatsNew(): void {
+  settingsMode.value = null
+  whatsNew.value = currentRelease()
 }
 
 async function handleStorageChanged(): Promise<void> {
@@ -335,7 +375,7 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
           class="settings-button"
           title="Settings"
           aria-label="Settings"
-          @click="settingsMode = 'settings'"
+          @click="openSettings()"
         >
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path fill="currentColor" d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.3 7.3 0 0 0-1.69-.98l-.38-2.65A.49.49 0 0 0 14 2h-4a.49.49 0 0 0-.49.42l-.38 2.65c-.61.25-1.17.58-1.69.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.49.49 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.58 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/>
@@ -346,9 +386,22 @@ onBeforeUnmount(() => window.removeEventListener("popstate", handlePopState))
 
     <SettingsDialog
       v-if="settingsMode"
+      :key="settingsMode"
       :mode="settingsMode"
+      :start-tab="settingsTab"
       @changed="handleStorageChanged"
       @close="settingsMode = null"
+      @whats-new="openWhatsNew"
+      @tour="openTour"
+    />
+    <WhatsNewDialog
+      v-else-if="whatsNew"
+      :version="APP_VERSION"
+      :releases="whatsNew"
+      :needs-latency="needsLatency"
+      @close="whatsNew = null"
+      @measure="openSettings('audio')"
+      @tour="openTour"
     />
 
     <main :class="{ 'projects-page': !selectedProject }">

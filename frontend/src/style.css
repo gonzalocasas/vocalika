@@ -268,6 +268,17 @@ h3 { margin:5px 0 10px; font-size:19px; }
 .settings-lede b { color:var(--cream); font-weight:600; }
 .welcome-steps { display:flex; flex-direction:column; gap:10px; margin:4px 0 0; padding:14px 16px 14px 36px; border:1px solid #26292b; border-radius:11px; background:var(--ink); color:#a8a49a; line-height:1.5; }
 .welcome-steps b { color:var(--cream); font-weight:600; }
+.tour-steps { list-style:none; padding-left:16px; gap:12px; }
+.tour-steps li { display:grid; grid-template-columns:28px 1fr; column-gap:6px; }
+.tour-steps li span { grid-row:span 2; color:var(--accent); font:500 11px/1.9 "IBM Plex Mono",monospace; }
+.tour-steps li b { display:block; }
+.latency-nudge { display:flex; flex-wrap:wrap; align-items:center; gap:14px; padding:14px 16px; border:1px solid var(--accent); border-radius:11px; background:var(--ink); color:#a8a49a; line-height:1.5; }
+.latency-nudge>div { flex:1 1 280px; }
+.latency-nudge b { color:var(--cream); font-weight:600; }
+.release-notes { display:flex; flex-direction:column; gap:8px; }
+.release-notes h4 { margin:0; color:var(--cream); font:500 15px "IBM Plex Mono",monospace; }
+.release-notes h4 small { margin-left:8px; color:#7c817f; font-size:11px; }
+.release-notes ul { margin:0 0 6px; padding-left:18px; color:#a8a49a; line-height:1.55; }
 .storage-current { display:flex; flex-direction:column; gap:6px; padding:14px 16px; border:1px solid #26292b; border-radius:11px; background:var(--ink); }
 .storage-current code { color:var(--cream); font:500 13px "IBM Plex Mono",monospace; overflow-wrap:anywhere; }
 .storage-current small { color:#7c817f; }
@@ -423,6 +434,8 @@ body.modal-open { overflow:hidden; }
 .about-version { display:flex; align-items:center; gap:18px; }
 .about-version img { width:150px; height:auto; }
 .about-version strong { display:block; color:var(--accent); font:500 18px "IBM Plex Mono",monospace; }
+.about-version { flex-wrap:wrap; }
+.about-actions { display:flex; flex-wrap:wrap; gap:8px; flex-basis:100%; }
 .about-version span { color:#7c817f; font:500 10px "IBM Plex Mono",monospace; letter-spacing:.12em; text-transform:uppercase; }
 .about-free p { margin:0 0 10px; }
 .about-giants { margin:14px 0 0; padding:0; list-style:none; border-top:1px solid #26292b; }
