@@ -45,7 +45,8 @@ async function checkStorage(): Promise<void> {
 }
 
 async function handleStorageChanged(): Promise<void> {
-  settingsMode.value = null
+  // Setup goes on to the audio step and closes itself when that is done.
+  if (settingsMode.value === "settings") settingsMode.value = null
   // Projects open from the previous folder may not exist in the new one.
   applyRoute({ projectId: null, tab: activeTab.value, takeId: null })
   writeRoute()

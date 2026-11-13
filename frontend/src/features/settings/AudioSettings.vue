@@ -15,6 +15,9 @@ import {
   routeNow,
 } from "../../shared/audioDevices"
 
+// During first-run setup measuring is the point of the step, so it stands out.
+defineProps<{ highlightMeasure?: boolean }>()
+
 // The microphone stays open while this tab is showing: browsers only reveal
 // device names to a page using the microphone, and the level meter is how the
 // singer can tell the right one is live.
@@ -206,6 +209,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="ghost-button compact"
+        :class="{ 'accent-button': highlightMeasure && !measured }"
         :disabled="measuring || opening || !audioDevices.inputInUse"
         @click="measure"
       >{{ measuring ? "LISTENING…" : measured ? "MEASURE AGAIN" : "MEASURE LATENCY" }}</button>
