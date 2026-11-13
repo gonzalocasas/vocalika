@@ -196,8 +196,8 @@ onBeforeUnmount(() => {
     <section class="latency-panel" aria-labelledby="latency-title">
       <span id="latency-title" class="device-label">LATENCY</span>
       <p class="latency-value">
-        <template v-if="measured"><b>{{ Math.round(measured.seconds * 1000) }} ms</b> · measured {{ measuredOn }}</template>
-        <template v-else><b>Not measured</b></template>
+        <span v-if="measured"><b>{{ Math.round(measured.seconds * 1000) }} ms</b> · measured {{ measuredOn }}</span>
+        <span v-else><b>Not measured</b></span>
         <small>{{ pair }}</small>
       </p>
       <p class="storage-note">
