@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/gonzalocasas/vocalika/compare/v0.5.1...v0.6.0) (2026-11-13)
+
+
+### Features
+
+* show what's new after an upgrade, with a tour of the app ([31fcd50](https://github.com/gonzalocasas/vocalika/commit/31fcd50268e634ae687519929a8a3eea3be14d6c))
+* welcome new users and guide them to measure latency on first start ([c810864](https://github.com/gonzalocasas/vocalika/commit/c810864141b7733ba9165c49eb5362c84e309102))
+
+
+### Bug Fixes
+
+* **settings:** keep the measured latency and its date on one line ([85603e9](https://github.com/gonzalocasas/vocalika/commit/85603e926579a44ae33b38c35e0668f09173ca0d))
+
 ## [0.5.1](https://github.com/gonzalocasas/vocalika/compare/v0.5.0...v0.5.1) (2026-11-08)
 
 
