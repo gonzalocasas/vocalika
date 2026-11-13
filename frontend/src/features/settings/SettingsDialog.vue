@@ -2,15 +2,27 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
 import { apiJson } from "../../shared/api"
+import { latencyForPair } from "../../shared/audioDevices"
 import AboutPanel from "../about/AboutPanel.vue"
 import AudioSettings from "./AudioSettings.vue"
 import type { FolderInspection, StorageStatus } from "../../shared/types"
 import { storageAction } from "./storageChoice"
 
-// "setup" is the first start: a folder has to be chosen before anything else,
-// so the dialog cannot be dismissed.
+// "setup" is the first start: a welcome, then a folder has to be chosen before
+// anything else (so the dialog cannot be dismissed), then the audio devices,
+// where measuring the latency is offered right away: takes recorded before it
+// is measured do not line up with the song.
 const props = defineProps<{ mode: "setup" | "settings" }>()
 const tab = ref<"storage" | "audio" | "about">("storage")
+const step = ref<"welcome" | "storage" | "audio">(props.mode === "setup" ? "welcome" : "storage")
+const setupTitle = computed(() => ({
+  welcome: "Welcome to Vocalika",
+  storage: "Where should Vocalika keep your songs?",
+  audio: "Measure your latency",
+}[step.value]))
+// Reactive through the shared device state, so the finish button changes the
+// moment a measurement lands.
+const calibrated = computed(() => latencyForPair() !== null)
 const TITLES = { storage: "Storage", audio: "Audio devices", about: "About Vocalika" } as const
 const emit = defineEmits<{ changed: [status: StorageStatus]; close: [] }>()
 
@@ -103,6 +115,10 @@ async function confirm(): Promise<void> {
     })
     status.value = result
     emit("changed", result)
+    if (props.mode === "setup") {
+      step.value = "audio"
+      tab.value = "audio"
+    }
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : String(reason)
   } finally {
@@ -111,7 +127,8 @@ async function confirm(): Promise<void> {
 }
 
 function requestClose(): void {
-  if (props.mode === "settings" && !saving.value) emit("close")
+  // In setup, only the audio step can be left: a folder is required, latency is not.
+  if ((props.mode === "settings" || step.value === "audio") && !saving.value) emit("close")
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -135,10 +152,10 @@ onBeforeUnmount(() => {
     <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <header class="settings-header">
         <div>
-          <span class="settings-kicker">{{ mode === "setup" ? "WELCOME" : "SETTINGS" }}</span>
-          <h3 id="settings-title">
-            {{ mode === "setup" ? "Where should Vocalika keep your songs?" : TITLES[tab] }}
-          </h3>
+          <span class="settings-kicker">
+            {{ mode === "setup" ? (step === "welcome" ? "WELCOME" : `SETUP · ${step === "storage" ? 1 : 2} OF 2`) : "SETTINGS" }}
+          </span>
+          <h3 id="settings-title">{{ mode === "setup" ? setupTitle : TITLES[tab] }}</h3>
         </div>
         <button v-if="mode === 'settings'" class="tool-button close" aria-label="Close settings" :disabled="saving" @click="requestClose">✕</button>
       </header>
@@ -155,15 +172,51 @@ onBeforeUnmount(() => {
         >{{ option.toUpperCase() }}</button>
       </nav>
 
-      <div v-if="tab === 'audio'" class="settings-body">
-        <AudioSettings />
-      </div>
-      <div v-else-if="tab === 'about'" class="settings-body">
-        <AboutPanel />
-      </div>
-      <footer v-if="tab === 'audio' || tab === 'about'" class="settings-footer">
-        <button class="ghost-button accent-button" @click="requestClose">DONE</button>
-      </footer>
+      <template v-if="mode === 'setup' && step === 'welcome'">
+        <div class="settings-body">
+          <p class="settings-lede">
+            Vocalika helps you sing the songs you love more accurately. Add a song, and it pulls the
+            voice out of the mix. Sing along and record a take, and it shows your pitch and timing
+            against the original, note by note: where you went flat, where you rushed, and by how much.
+          </p>
+          <p class="settings-lede">
+            Everything runs on this computer. Your recordings never leave it.
+          </p>
+          <ol class="welcome-steps">
+            <li><b>Choose a folder</b> for your songs and takes.</li>
+            <li><b>Measure your latency</b>, so your takes line up with the song. It takes a few seconds.</li>
+          </ol>
+        </div>
+        <footer class="settings-footer">
+          <button class="ghost-button accent-button" @click="step = 'storage'">GET STARTED</button>
+        </footer>
+      </template>
+
+      <template v-else-if="tab === 'audio'">
+        <div class="settings-body">
+          <p v-if="mode === 'setup'" class="settings-lede">
+            Plug in the headphones and microphone you will sing with, check the bar moves when you
+            speak, then press <b>Measure latency</b>.
+          </p>
+          <AudioSettings :highlight-measure="mode === 'setup'" />
+        </div>
+        <footer class="settings-footer">
+          <span v-if="mode === 'setup' && !calibrated" class="storage-note">You can measure it later in Settings → Audio.</span>
+          <button v-if="mode === 'setup' && !calibrated" class="text-button" @click="requestClose">SKIP FOR NOW</button>
+          <button v-else class="ghost-button accent-button" @click="requestClose">
+            {{ mode === "setup" ? "START SINGING" : "DONE" }}
+          </button>
+        </footer>
+      </template>
+
+      <template v-else-if="tab === 'about'">
+        <div class="settings-body">
+          <AboutPanel />
+        </div>
+        <footer class="settings-footer">
+          <button class="ghost-button accent-button" @click="requestClose">DONE</button>
+        </footer>
+      </template>
 
       <template v-else>
       <div class="settings-body">
