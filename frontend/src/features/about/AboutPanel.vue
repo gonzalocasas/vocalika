@@ -32,6 +32,7 @@ interface Group {
   packages: Package[]
 }
 
+const emit = defineEmits<{ whatsNew: []; tour: [] }>()
 const about = ref<About | null>(null)
 const webPackages = ref<(Package & { licenses: LicenseText[] })[]>([])
 const error = ref("")
@@ -113,6 +114,10 @@ async function loadTexts(group: Group, item: Package, event: Event): Promise<voi
       <div>
         <strong>{{ about ? `Version ${about.version}` : "Version …" }}</strong>
         <span v-if="about">{{ about.desktop ? "Desktop app" : "In the browser" }} · {{ about.platform }}</span>
+      </div>
+      <div class="about-actions">
+        <button type="button" class="ghost-button compact" @click="emit('whatsNew')">WHAT'S NEW</button>
+        <button type="button" class="ghost-button compact" @click="emit('tour')">WELCOME TOUR</button>
       </div>
     </section>
 

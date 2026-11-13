@@ -12,19 +12,31 @@ import { storageAction } from "./storageChoice"
 // anything else (so the dialog cannot be dismissed), then the audio devices,
 // where measuring the latency is offered right away: takes recorded before it
 // is measured do not line up with the song.
-const props = defineProps<{ mode: "setup" | "settings" }>()
-const tab = ref<"storage" | "audio" | "about">("storage")
-const step = ref<"welcome" | "storage" | "audio">(props.mode === "setup" ? "welcome" : "storage")
-const setupTitle = computed(() => ({
-  welcome: "Welcome to Vocalika",
+// "tour" replays it later, from What's new or About: how the app works, then
+// the latency, without the folder (already chosen).
+const props = defineProps<{ mode: "setup" | "tour" | "settings"; startTab?: "storage" | "audio" | "about" }>()
+const guided = props.mode !== "settings"
+const tab = ref<"storage" | "audio" | "about">(props.startTab ?? "storage")
+const step = ref<"welcome" | "storage" | "audio">(guided ? "welcome" : "storage")
+const guidedTitle = computed(() => ({
+  welcome: props.mode === "tour" ? "How Vocalika works" : "Welcome to Vocalika",
   storage: "Where should Vocalika keep your songs?",
   audio: "Measure your latency",
 }[step.value]))
+const kicker = computed(() => {
+  if (props.mode === "settings") return "SETTINGS"
+  if (props.mode === "tour") return `TOUR · ${step.value === "welcome" ? 1 : 2} OF 2`
+  return step.value === "welcome" ? "WELCOME" : `SETUP · ${step.value === "storage" ? 1 : 2} OF 2`
+})
+function showAudioStep(): void {
+  step.value = "audio"
+  tab.value = "audio"
+}
 // Reactive through the shared device state, so the finish button changes the
 // moment a measurement lands.
 const calibrated = computed(() => latencyForPair() !== null)
 const TITLES = { storage: "Storage", audio: "Audio devices", about: "About Vocalika" } as const
-const emit = defineEmits<{ changed: [status: StorageStatus]; close: [] }>()
+const emit = defineEmits<{ changed: [status: StorageStatus]; close: []; whatsNew: []; tour: [] }>()
 
 const status = ref<StorageStatus | null>(null)
 const draft = ref("")
@@ -115,10 +127,7 @@ async function confirm(): Promise<void> {
     })
     status.value = result
     emit("changed", result)
-    if (props.mode === "setup") {
-      step.value = "audio"
-      tab.value = "audio"
-    }
+    if (props.mode === "setup") showAudioStep()
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : String(reason)
   } finally {
@@ -128,7 +137,7 @@ async function confirm(): Promise<void> {
 
 function requestClose(): void {
   // In setup, only the audio step can be left: a folder is required, latency is not.
-  if ((props.mode === "settings" || step.value === "audio") && !saving.value) emit("close")
+  if ((props.mode !== "setup" || step.value === "audio") && !saving.value) emit("close")
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -152,12 +161,10 @@ onBeforeUnmount(() => {
     <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <header class="settings-header">
         <div>
-          <span class="settings-kicker">
-            {{ mode === "setup" ? (step === "welcome" ? "WELCOME" : `SETUP · ${step === "storage" ? 1 : 2} OF 2`) : "SETTINGS" }}
-          </span>
-          <h3 id="settings-title">{{ mode === "setup" ? setupTitle : TITLES[tab] }}</h3>
+          <span class="settings-kicker">{{ kicker }}</span>
+          <h3 id="settings-title">{{ guided ? guidedTitle : TITLES[tab] }}</h3>
         </div>
-        <button v-if="mode === 'settings'" class="tool-button close" aria-label="Close settings" :disabled="saving" @click="requestClose">✕</button>
+        <button v-if="mode !== 'setup'" class="tool-button close" aria-label="Close settings" :disabled="saving" @click="requestClose">✕</button>
       </header>
 
       <nav v-if="mode === 'settings'" class="settings-tabs" role="tablist" aria-label="Settings sections">
@@ -172,7 +179,28 @@ onBeforeUnmount(() => {
         >{{ option.toUpperCase() }}</button>
       </nav>
 
-      <template v-if="mode === 'setup' && step === 'welcome'">
+      <template v-if="mode === 'tour' && step === 'welcome'">
+        <div class="settings-body">
+          <p class="settings-lede">
+            Each song is a project. Add one from an audio file or a YouTube link, and Vocalika pulls
+            the voice out of the mix once, then keeps both the voice and the instrumental. Every
+            project has five tabs:
+          </p>
+          <ol class="welcome-steps tour-steps">
+            <li><span>01</span><b>Reference</b> Listen to the voice alone or under the music, trim to the part you are working on, and move the song into your key. The lyrics light up as it plays.</li>
+            <li><span>02</span><b>Practice</b> Exercises drawn from the song: its range, its long notes and its leaps, played on a piano and scored as you sing them.</li>
+            <li><span>03</span><b>Takes</b> Record yourself singing along, with the lyrics and your pitch live on screen, or upload a take recorded elsewhere.</li>
+            <li><span>04</span><b>Compare</b> Your pitch over the original, note by note, in cents: where you went flat or sharp, and where you came in early or late.</li>
+            <li><span>05</span><b>Export</b> Your take mixed with the instrumental, to keep or share.</li>
+          </ol>
+        </div>
+        <footer class="settings-footer">
+          <button class="text-button" @click="requestClose">CLOSE</button>
+          <button class="ghost-button accent-button" @click="showAudioStep">NEXT: YOUR LATENCY</button>
+        </footer>
+      </template>
+
+      <template v-else-if="mode === 'setup' && step === 'welcome'">
         <div class="settings-body">
           <p class="settings-lede">
             Vocalika helps you sing the songs you love more accurately. Add a song, and it pulls the
@@ -194,11 +222,11 @@ onBeforeUnmount(() => {
 
       <template v-else-if="tab === 'audio'">
         <div class="settings-body">
-          <p v-if="mode === 'setup'" class="settings-lede">
+          <p v-if="guided" class="settings-lede">
             Plug in the headphones and microphone you will sing with, check the bar moves when you
             speak, then press <b>Measure latency</b>.
           </p>
-          <AudioSettings :highlight-measure="mode === 'setup'" />
+          <AudioSettings :highlight-measure="guided" />
         </div>
         <footer class="settings-footer">
           <span v-if="mode === 'setup' && !calibrated" class="storage-note">You can measure it later in Settings → Audio.</span>
@@ -211,7 +239,7 @@ onBeforeUnmount(() => {
 
       <template v-else-if="tab === 'about'">
         <div class="settings-body">
-          <AboutPanel />
+          <AboutPanel @whats-new="emit('whatsNew')" @tour="emit('tour')" />
         </div>
         <footer class="settings-footer">
           <button class="ghost-button accent-button" @click="requestClose">DONE</button>
